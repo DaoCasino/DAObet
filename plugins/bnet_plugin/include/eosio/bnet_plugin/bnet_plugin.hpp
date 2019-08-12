@@ -67,7 +67,7 @@ class bnet_plugin : public plugin<bnet_plugin> {
       void send(uint32_t session_id, uint32_t msg_type, const vector<char>&);
 
    public:
-      using new_peer = channel_decl<struct new_peer_tag, uint32_t>;
+      using new_peer = channel_decl<struct bnet_new_peer_tag, uint32_t>;
 
    private:
       bnet_ptr my;

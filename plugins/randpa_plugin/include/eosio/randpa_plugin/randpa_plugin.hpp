@@ -1,6 +1,6 @@
 #pragma once
 #include <appbase/application.hpp>
-#include <eosio/bnet_plugin/bnet_plugin.hpp>
+#include <eosio/net_plugin/net_plugin.hpp>
 
 namespace eosio {
 
@@ -11,7 +11,7 @@ public:
     randpa_plugin();
     virtual ~randpa_plugin();
 
-    APPBASE_PLUGIN_REQUIRES((bnet_plugin)(chain_plugin))
+    APPBASE_PLUGIN_REQUIRES((net_plugin)(chain_plugin))
     virtual void set_program_options(options_description&, options_description& cfg) override;
 
     void plugin_initialize(const variables_map& options);

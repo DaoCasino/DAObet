@@ -30,7 +30,7 @@ public:
 
     channels::irreversible_block::channel_type::handle _on_irb_handle;
     channels::accepted_block::channel_type::handle _on_accepted_block_handle;
-    bnet_plugin::new_peer::channel_type::handle _on_new_peer_handle;
+    net_plugin::new_peer::channel_type::handle _on_new_peer_handle;
 
     template <typename T>
     static constexpr uint32_t get_net_msg_type(const T& msg = {}) {
@@ -84,7 +84,7 @@ public:
             ev_ch->send(randpa_event { on_irreversible_event { s->id } });
         });
 
-        _on_new_peer_handle = app().get_channel<bnet_plugin::new_peer>()
+        _on_new_peer_handle = app().get_channel<net_plugin::new_peer>()
         .subscribe( [ev_ch]( uint32_t ses_id ) {
             ev_ch->send(randpa_event { on_new_peer_event { ses_id } });
         });
@@ -195,13 +195,15 @@ public:
 
     template <typename T>
     void send(uint32_t ses_id, const T& msg) {
-        app().get_plugin<bnet_plugin>()
-            .send(ses_id, get_net_msg_type(msg), msg);
+        app().post(priority::high, [ses_id, msg]() {
+            app().get_plugin<net_plugin>()
+                .send(ses_id, get_net_msg_type(msg), msg);
+        });
     }
 
     template <typename T>
     void subscribe(const net_channel_ptr& ch) {
-        app().get_plugin<bnet_plugin>()
+        app().get_plugin<net_plugin>()
         .subscribe<T>(get_net_msg_type<T>(),
         [ch](uint32_t ses_id, const T & msg) {
             dlog("Randpa network message received, ses_id: ${ses_id}, type: ${type}, msg: ${msg}",

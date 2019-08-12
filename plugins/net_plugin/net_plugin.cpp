@@ -126,6 +126,8 @@ namespace eosio {
       connection_ptr find_connection(const string& host)const;
 
       std::set< connection_ptr >       connections;
+      std::unordered_map< uint32_t, connection_wptr > connections_by_num;
+      std::unordered_map< uint32_t, std::vector<subs_cb> > custom_handlers;
       bool                             done = false;
       unique_ptr< sync_manager >       sync_master;
       unique_ptr< dispatch_manager >   dispatcher;
@@ -216,6 +218,7 @@ namespace eosio {
       void handle_message(const connection_ptr& c, const signed_block_ptr& msg);
       void handle_message(const connection_ptr& c, const packed_transaction& msg) = delete; // packed_transaction_ptr overload used instead
       void handle_message(const connection_ptr& c, const packed_transaction_ptr& msg);
+      void handle_message(const connection_ptr& c, const custom_message& msg);
 
       void start_conn_timer(boost::asio::steady_timer::duration du, std::weak_ptr<connection> from_connection);
       void start_txn_timer();
@@ -257,6 +260,9 @@ namespace eosio {
       chain::signature_type sign_compact(const chain::public_key_type& signer, const fc::sha256& digest) const;
 
       uint16_t to_protocol_version(uint16_t v);
+
+      void subscribe(uint32_t msg_type, subs_cb&&);
+      void send(uint32_t peer_num, const custom_message&);
    };
 
    const fc::string logger_name("net_plugin_impl");
@@ -524,6 +530,8 @@ namespace eosio {
       uint32_t               fork_head_num = 0;
       optional<request_message> last_req;
 
+      uint32_t num;
+
       connection_status get_status()const {
          connection_status stat;
          stat.peer = peer_addr;
@@ -549,6 +557,11 @@ namespace eosio {
       static const size_t            ts_buffer_size{32};
       char                           ts[ts_buffer_size];          //!< working buffer for making human readable timestamps
       /** @} */
+
+      static uint32_t get_new_num() {
+         static uint32_t last_num = 0;
+         return last_num++;
+      }
 
       bool connected();
       bool current();
@@ -744,7 +757,8 @@ namespace eosio {
         no_retry(no_reason),
         fork_head(),
         fork_head_num(0),
-        last_req()
+        last_req(),
+        num(get_new_num())
    {
       fc_ilog( logger, "created connection to ${n}", ("n", endpoint) );
       initialize();
@@ -770,7 +784,8 @@ namespace eosio {
         no_retry(no_reason),
         fork_head(),
         fork_head_num(0),
-        last_req()
+        last_req(),
+        num(get_new_num())
    {
       fc_ilog( logger, "accepted network connection" );
       initialize();
@@ -1042,6 +1057,7 @@ namespace eosio {
    #define update_metric(type, m, x) { \
       if (net_message::tag<x>::value == m.which()) { \
          app().get_plugin<telemetry_plugin>().update_counter("net_" #type "_" #x "_cnt"); \
+         app().get_plugin<telemetry_plugin>().update_counter("net_" #type "_total_cnt"); \
       } \
    }
 
@@ -1079,6 +1095,7 @@ namespace eosio {
       update_metric(out, m, sync_request_message);
       update_metric(out, m, signed_block);
       update_metric(out, m, packed_transaction);
+      update_metric(out, m, custom_message);
    }
 
    template< typename T>
@@ -1837,6 +1854,7 @@ namespace eosio {
             if((*itr).peer_addr == c->peer_addr) {
                (*itr).reset();
                close(itr);
+               connections_by_num.erase(itr->num);
                connections.erase(itr);
                break;
             }
@@ -1912,6 +1930,7 @@ namespace eosio {
       else {
          start_read_message( con );
          ++started_sessions;
+         app().get_channel<net_plugin::new_peer>().publish(priority::medium, con->num);
          return true;
          // for now, we can just use the application main loop.
          //     con->readloop_complete  = bf::async( [=](){ read_loop( con ); } );
@@ -1952,8 +1971,8 @@ namespace eosio {
                      ++num_clients;
                      connection_ptr c = std::make_shared<connection>( socket );
                      connections.insert( c );
+                     connections_by_num[c->num] = c;
                      start_session( c );
-
                   }
                   else {
                      if (from_addr >= max_nodes_per_host) {
@@ -2177,6 +2196,7 @@ namespace eosio {
          update_metric(in, msg, sync_request_message);
          update_metric(in, msg, signed_block);
          update_metric(in, msg, packed_transaction);
+         update_metric(in, msg, custom_message);
       } catch( const fc::exception& e ) {
          edump( (e.to_detail_string()) );
          close( conn );
@@ -2205,6 +2225,25 @@ namespace eosio {
       }
    }
 
+   void net_plugin_impl::send(uint32_t peer_num, const custom_message& msg) {
+      auto c_wptr_itr = connections_by_num.find(peer_num);
+      if (c_wptr_itr == connections_by_num.end()) {
+         return;
+      }
+      if (auto c = c_wptr_itr->second.lock()) {
+         c->enqueue(msg);
+      }
+   }
+
+   void net_plugin_impl::subscribe(uint32_t msg_type, subs_cb&& cb) {
+      if (!custom_handlers.count(msg_type)) {
+         custom_handlers.insert({msg_type, { std::move(cb) }});
+      }
+      else {
+         custom_handlers[msg_type].emplace_back(std::move(cb));
+      }
+   }
+
    bool net_plugin_impl::is_valid(const handshake_message& msg) {
       // Do some basic validation of an incoming handshake_message, so things
       // that really aren't handshake messages can be quickly discarded without
@@ -2228,6 +2267,17 @@ namespace eosio {
          valid = false;
       }
       return valid;
+   }
+
+   void net_plugin_impl::handle_message(const connection_ptr& c, const custom_message& msg) {
+      peer_ilog(c, "received custom_message");
+
+      auto handlers_itr = custom_handlers.find(msg.type);
+      if (handlers_itr != custom_handlers.end()) {
+         for (auto && handler: handlers_itr->second) {
+            handler(c->num, msg);
+         }
+      }
    }
 
    void net_plugin_impl::handle_message(const connection_ptr& c, const chain_size_message& msg) {
@@ -2710,6 +2760,7 @@ namespace eosio {
                connect(*it);
             }
             else {
+               connections_by_num.erase((*it)->num);
                it = connections.erase(it);
                continue;
             }
@@ -2876,6 +2927,14 @@ namespace eosio {
    }
 
    net_plugin::~net_plugin() {
+   }
+
+   void net_plugin::send(uint32_t peer_num, const custom_message& msg) {
+      my->send(peer_num, msg);
+   }
+
+   void net_plugin::subscribe(uint32_t msg_type, subs_cb&& cb) {
+      my->subscribe(msg_type, std::move(cb));
    }
 
    void net_plugin::set_program_options( options_description& /*cli*/, options_description& cfg )
@@ -3084,6 +3143,8 @@ namespace eosio {
       add_metric(sync_request_message);
       add_metric(signed_block);
       add_metric(packed_transaction);
+      add_metric(custom_message);
+      add_metric(total);
    }
 
    void net_plugin::handle_sighup() {
@@ -3142,6 +3203,7 @@ namespace eosio {
       connection_ptr c = std::make_shared<connection>(host);
       fc_dlog(logger,"adding new connection to the list");
       my->connections.insert( c );
+      my->connections_by_num[c->num] = c;
       fc_dlog(logger,"calling active connector");
       my->connect( c );
       return "added connection";
@@ -3152,6 +3214,7 @@ namespace eosio {
          if( (*itr)->peer_addr == host ) {
             (*itr)->reset();
             my->close(*itr);
+            my->connections_by_num.erase((*itr)->num);
             my->connections.erase(itr);
             return "connection removed";
          }
