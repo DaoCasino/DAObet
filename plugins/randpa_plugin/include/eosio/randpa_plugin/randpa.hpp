@@ -163,7 +163,9 @@ public:
     static constexpr uint32_t msg_expiration_ms = 1000;
 
 public:
-    randpa() {}
+    randpa() {
+        _private_key = private_key_type::generate();
+    }
 
     randpa& set_in_net_channel(const net_channel_ptr& ptr) {
         _in_net_channel = ptr;
@@ -187,6 +189,8 @@ public:
 
     randpa& set_private_key(const private_key_type& key) {
         _private_key = key;
+        _public_key = key.get_public_key();
+        _provided_bp_key = true;
         return *this;
     }
 
@@ -231,12 +235,14 @@ private:
     std::unique_ptr<std::thread> _thread_ptr;
     std::atomic<bool> _done { false };
     private_key_type _private_key;
+    public_key_type _public_key;
     prefix_tree_ptr _prefix_tree;
     randpa_round_ptr _round;
     block_id_type _lib;
     uint32_t _last_prooved_block_num { 0 };
     std::map<public_key_type, uint32_t> _peers;
     std::map<public_key_type, std::set<digest_type>> known_messages;
+    bool _provided_bp_key { false };
 
 #ifndef SYNC_RANDPA
     message_queue<randpa_message> _message_queue;
@@ -537,9 +543,11 @@ private:
         }
 
         if (should_start_round(event.block_id)) {
-            clear_round_data();
-            new_round(round_num(event.block_id), event.creator_key,
-                    event.active_bp_keys.count(_private_key.get_public_key()));
+            remove_round();
+
+            if (is_active_bp(event.block_id)) {
+                new_round(round_num(event.block_id), event.creator_key);
+            }
         }
 
         if (should_end_prevote(event.block_id)) {
@@ -570,24 +578,26 @@ private:
 
     template <typename T>
     void process_round_msg(uint32_t ses_id, const T& msg) {
+        auto last_round_num = round_num(_prefix_tree->get_head()->block_id);
+
+        if (last_round_num == msg.data.round_num) {
+            bcast(msg);
+        }
+
+        auto msg_hash = digest_type::hash(msg);
+
+        if (known_messages[_public_key].count(msg_hash)) {
+            dlog("Message already known");
+            return;
+        }
+
         if (!_round) {
             dlog("Randpa round does not exists");
             return;
         }
 
-        auto self_pub_key = _private_key.get_public_key();
-        auto msg_hash = digest_type::hash(msg);
-
-        if (_round->get_num() == msg.data.round_num) {
-            bcast(msg);
-        }
-
-        if (!known_messages[self_pub_key].count(msg_hash)) {
-            if (_round->is_active_bp()) {
-                _round->on(msg);
-            }
-            known_messages[self_pub_key].insert(msg_hash);
-        }
+        _round->on(msg);
+        known_messages[_public_key].insert(msg_hash);
     }
 
     uint32_t round_num(const block_id_type& block_id) const {
@@ -619,6 +629,19 @@ private:
             && num_in_round(block_id) == prevote_width;
     }
 
+    bool is_active_bp(const block_id_type& block_id) const {
+        if (!_provided_bp_key)
+            return false;
+
+        auto node_ptr = _prefix_tree->find(block_id);
+
+        if (!node_ptr) {
+            return false;
+        }
+
+        return node_ptr->active_bp_keys.count(_public_key);
+    }
+
     void finish_round() {
         if (!_round) {
             return;
@@ -643,8 +666,8 @@ private:
         }
     }
 
-    void new_round(uint32_t round_num, const public_key_type& primary, bool is_active_bp) {
-        _round.reset(new randpa_round(round_num, primary, _prefix_tree, _private_key, is_active_bp,
+    void new_round(uint32_t round_num, const public_key_type& primary) {
+        _round.reset(new randpa_round(round_num, primary, _prefix_tree, _private_key,
         [this](const prevote_msg& msg) {
             bcast(msg);
         },
@@ -656,9 +679,14 @@ private:
         }));
     }
 
-    void clear_round_data() {
+    void remove_round() {
+        if (!_round) {
+            return;
+        }
+
         known_messages.clear();
         _prefix_tree->remove_confirmations();
+        _round.reset();
     }
 
     void update_lib(const block_id_type& lib_id) {

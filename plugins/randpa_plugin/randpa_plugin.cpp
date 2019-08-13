@@ -252,7 +252,12 @@ void randpa_plugin::set_program_options(options_description& /*cli*/, options_de
 
 void randpa_plugin::plugin_initialize(const variables_map& options) {
     const auto iterator = options.find("randpa-private-key");
-    FC_ASSERT(iterator != options.end(), "Argument --randpa-private-key not provided");
+
+    if (iterator == options.end()) {
+        wlog("Argument --randpa-private-key not provided, RANDPA running with non BP mode");
+        return;
+    }
+
     auto wif_key = iterator->second.as<std::string>();
     try {
         my->_randpa.set_private_key(private_key_type(wif_key));

@@ -36,7 +36,6 @@ public:
         const public_key_type& primary,
         const prefix_tree_ptr& tree,
         const private_key_type& private_key,
-        bool is_block_producer,
         prevote_bcaster_type && prevote_bcaster,
         precommit_bcaster_type && precommit_bcaster,
         done_cb_type && done_cb
@@ -45,7 +44,6 @@ public:
         primary(primary),
         tree(tree),
         private_key(private_key),
-        is_block_producer(is_block_producer),
         prevote_bcaster(std::move(prevote_bcaster)),
         precommit_bcaster(std::move(precommit_bcaster)),
         done_cb(std::move(done_cb))
@@ -55,9 +53,7 @@ public:
             ("p", primary)
         );
 
-        if (is_block_producer) {
-            prevote();
-        }
+        prevote();
     }
 
     uint32_t get_num() const {
@@ -70,10 +66,6 @@ public:
 
     void set_state(const state& s) {
         state = s;
-    }
-
-    bool is_active_bp() const {
-        return is_block_producer;
     }
 
     proof_type get_proof() {
@@ -304,15 +296,6 @@ private:
         return node->confirmation_number() > 2 * node->active_bp_keys.size() / 3;
     }
 
-    set<public_key_type> get_active_bps(const block_id_type& block_id) {
-        auto node = tree->find(block_id);
-        return node ? node->active_bp_keys : set<public_key_type>();
-    };
-
-    bool is_active_bp(const block_id_type& block_id) {
-        return get_active_bps(block_id).count(private_key.get_public_key());
-    }
-
     uint32_t num { 0 };
     public_key_type primary;
     prefix_tree_ptr tree;
@@ -320,7 +303,6 @@ private:
     proof_type proof;
     tree_node_ptr best_node;
     private_key_type private_key;
-    bool is_block_producer;
     prevote_bcaster_type prevote_bcaster;
     precommit_bcaster_type precommit_bcaster;
     done_cb_type done_cb;
