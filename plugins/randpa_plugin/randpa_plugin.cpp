@@ -3,12 +3,17 @@
 #include <eosio/randpa_plugin/prefix_chain_tree.hpp>
 #include <eosio/randpa_plugin/randpa.hpp>
 #include <eosio/chain/plugin_interface.hpp>
+#include <eosio/http_client_plugin/http_client_plugin.hpp>
 #include <fc/io/json.hpp>
 #include <queue>
 #include <chrono>
 #include <atomic>
 #include <fc/exception/exception.hpp>
 #include <eosio/telemetry_plugin/telemetry_plugin.hpp>
+
+#include <boost/algorithm/string.hpp>
+#include <fc/smart_ref_impl.hpp>
+#include <fc/scoped_exit.hpp>
 
 namespace eosio {
 
@@ -245,25 +250,64 @@ randpa_plugin::randpa_plugin():my(new randpa_plugin_impl()){}
 randpa_plugin::~randpa_plugin(){}
 
 void randpa_plugin::set_program_options(options_description& /*cli*/, options_description& cfg) {
-    cfg.add_options()
-        ("randpa-private-key", boost::program_options::value<string>(), "Private key for randpa finalizer")
-    ;
+
+}
+
+static signature_provider_type make_key_signature_provider(const private_key_type& key) {
+   return [key]( const chain::digest_type& digest ) {
+      return key.sign(digest);
+   };
+}
+
+static signature_provider_type make_keosd_signature_provider(const string& url_str, const public_key_type& pubkey) {
+   fc::url keosd_url;
+   if(boost::algorithm::starts_with(url_str, "unix://"))
+      //send the entire string after unix:// to http_plugin. It'll auto-detect which part
+      // is the unix socket path, and which part is the url to hit on the server
+      keosd_url = fc::url("unix", url_str.substr(7), ostring(), ostring(), ostring(), ostring(), ovariant_object(), fc::optional<uint16_t>());
+   else
+      keosd_url = fc::url(url_str);
+
+   return [keosd_url, pubkey]( const chain::digest_type& digest ) {
+     fc::variant params;
+     fc::to_variant(std::make_pair(digest, pubkey), params);
+     auto deadline = fc::time_point::maximum();
+     return app().get_plugin<http_client_plugin>().get_client().post_sync(keosd_url, params, deadline).as<chain::signature_type>();
+   };
 }
 
 void randpa_plugin::plugin_initialize(const variables_map& options) {
-    const auto iterator = options.find("randpa-private-key");
-
-    if (iterator == options.end()) {
-        wlog("Argument --randpa-private-key not provided, RANDPA running with non BP mode");
+    if (!options.count("signature-provider")) {
         return;
     }
 
-    auto wif_key = iterator->second.as<std::string>();
-    try {
-        my->_randpa.set_private_key(private_key_type(wif_key));
+    const auto key_spec_pair_vector = options["signature-provider"].as<vector<std::string>>();
+    if (!key_spec_pair_vector.empty()) {
+        return;
     }
-    catch ( fc::exception& e ) {
-        elog("Malformed private key: ${key}", ("key", wif_key));
+    const std::string key_spec_pair = key_spec_pair_vector[0];
+
+    try {
+        auto delim = key_spec_pair.find("=");
+        EOS_ASSERT(delim != std::string::npos, plugin_config_exception, "Missing \"=\" in the key spec pair");
+        auto pub_key_str = key_spec_pair.substr(0, delim);
+        auto spec_str = key_spec_pair.substr(delim + 1);
+
+        auto spec_delim = spec_str.find(":");
+        EOS_ASSERT(spec_delim != std::string::npos, plugin_config_exception, "Missing \":\" in the key spec pair");
+        auto spec_type_str = spec_str.substr(0, spec_delim);
+        auto spec_data = spec_str.substr(spec_delim + 1);
+
+        auto pubkey = public_key_type(pub_key_str);
+
+        if (spec_type_str == "KEY") {
+           my->_randpa.set_signature_provider(make_key_signature_provider(private_key_type(spec_data)), pubkey);
+        } else if (spec_type_str == "KEOSD") {
+           my->_randpa.set_signature_provider(make_keosd_signature_provider(spec_data, pubkey), pubkey);
+        }
+
+    } catch (...) {
+        elog("Malformed signature provider: \"${val}\", ignoring!", ("val", key_spec_pair));
     }
 }
 

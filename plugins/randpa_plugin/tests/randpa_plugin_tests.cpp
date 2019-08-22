@@ -17,6 +17,12 @@ using namespace randpa_finality;
 using tree_node = prefix_node<uint32_t>;
 using prefix_tree = prefix_chain_tree<tree_node>;
 
+static signature_provider_type make_key_signature_provider(const private_key_type& key) {
+   return [key]( const digest_type& digest ) {
+      return key.sign(digest);
+   };
+}
+
 inline auto get_pub_key() {
     return private_key::generate().get_public_key();
 }
@@ -126,7 +132,7 @@ BOOST_AUTO_TEST_CASE(prevote_validate_success) try {
         { fc::sha256("b"), fc::sha256("c"), fc::sha256("d") }
     };
 
-    auto msg = prevote_msg(prevote, priv_key);
+    auto msg = prevote_msg(prevote, make_key_signature_provider(priv_key));
 
     BOOST_TEST(prevote.round_num == msg.data.round_num);
     BOOST_TEST(prevote.base_block == msg.data.base_block);
@@ -145,7 +151,7 @@ BOOST_AUTO_TEST_CASE(prevote_validate_fail) try {
         { fc::sha256("b"), fc::sha256("c"), fc::sha256("d") }
     };
 
-    auto msg = prevote_msg(prevote, priv_key);
+    auto msg = prevote_msg(prevote, make_key_signature_provider(priv_key));
 
     auto priv_key_2 = private_key::generate();
     auto pub_key_2 = priv_key_2.get_public_key();
@@ -171,7 +177,7 @@ BOOST_AUTO_TEST_CASE(precommit_validate_success) try {
         fc::sha256("a")
     };
 
-    auto msg = precommit_msg(precommit, priv_key);
+    auto msg = precommit_msg(precommit, make_key_signature_provider(priv_key));
 
     BOOST_TEST(precommit.round_num == msg.data.round_num);
     BOOST_TEST(precommit.block_id == msg.data.block_id);
@@ -188,7 +194,7 @@ BOOST_AUTO_TEST_CASE(precommit_validate_fail) try {
         fc::sha256("a")
     };
 
-    auto msg = precommit_msg(precommit, priv_key);
+    auto msg = precommit_msg(precommit, make_key_signature_provider(priv_key));
 
     auto priv_key_2 = private_key::generate();
     auto pub_key_2 = priv_key_2.get_public_key();

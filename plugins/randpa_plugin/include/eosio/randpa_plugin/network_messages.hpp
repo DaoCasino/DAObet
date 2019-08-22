@@ -16,9 +16,9 @@ public:
     network_msg() = default;
     network_msg(const T& data_, const signature_type& signature_): data(data_), signature(signature_) {}
     network_msg(const T& data_, signature_type&& signature_): data(data_), signature(signature_) {}
-    network_msg(const T& data_, const private_key_type& priv_key) {
+    network_msg(const T& data_, const signature_provider_type& signature_provider) {
         data = data_;
-        signature = priv_key.sign(hash());
+        signature = signature_provider(hash());
     }
 
     digest_type hash() const {

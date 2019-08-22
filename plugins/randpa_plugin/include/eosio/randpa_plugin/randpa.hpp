@@ -10,7 +10,6 @@
 #include <thread>
 #include <condition_variable>
 
-
 namespace randpa_finality {
 
 using ::fc::static_variant;
@@ -155,7 +154,6 @@ using event_channel_ptr = std::shared_ptr<event_channel>;
 using finality_channel = channel<const block_id_type&>;
 using finality_channel_ptr = std::shared_ptr<finality_channel>;
 
-
 class randpa {
 public:
     static constexpr uint32_t round_width = 2;
@@ -164,7 +162,10 @@ public:
 
 public:
     randpa() {
-        _private_key = private_key_type::generate();
+        auto private_key = private_key_type::generate();
+        _signature_provider = [private_key](const digest_type& digest) {
+            return private_key.sign(digest);
+        };
     }
 
     randpa& set_in_net_channel(const net_channel_ptr& ptr) {
@@ -187,9 +188,10 @@ public:
         return *this;
     }
 
-    randpa& set_private_key(const private_key_type& key) {
-        _private_key = key;
-        _public_key = key.get_public_key();
+    randpa& set_signature_provider(const signature_provider_type& signature_provider,
+        const public_key_type& public_key) {
+        _signature_provider = signature_provider;
+        _public_key = public_key;
         _provided_bp_key = true;
         return *this;
     }
@@ -234,7 +236,7 @@ public:
 private:
     std::unique_ptr<std::thread> _thread_ptr;
     std::atomic<bool> _done { false };
-    private_key_type _private_key;
+    signature_provider_type _signature_provider;
     public_key_type _public_key;
     prefix_tree_ptr _prefix_tree;
     randpa_round_ptr _round;
@@ -476,9 +478,8 @@ private:
         }
 
         if (!validate_proof(proof)) {
-            wlog("Invalid proof from ${peer}: ${msg}",
-                    ("peer", msg.public_key())
-                    ("msg", msg));
+            wlog("Invalid proof from ${peer}", ("peer", msg.public_key()));
+            dlog("Proof msg: ${msg}", ("msg", msg));
             return;
         }
 
@@ -498,7 +499,7 @@ private:
         try {
             _peers[msg.public_key()] = ses_id;
 
-            send(ses_id, handshake_ans_msg(handshake_ans_type { _lib }, _private_key));
+            send(ses_id, handshake_ans_msg(handshake_ans_type { _lib }, _signature_provider));
         } catch (const fc::exception& e) {
             elog("Randpa handshake_msg handler error, reason: ${e}, msg: ${msg}",
                     ("e", e.what())
@@ -571,7 +572,7 @@ private:
 
     void on(const on_new_peer_event& event) {
         dlog("Randpa on_new_peer_event event handled, ses_id: ${ses_id}", ("ses_id", event.ses_id));
-        auto msg = handshake_msg(handshake_type{_lib}, _private_key);
+        auto msg = handshake_msg(handshake_type{_lib}, _signature_provider);
         dlog("Sending handshake msg");
         send(event.ses_id, msg);
     }
@@ -662,12 +663,12 @@ private:
         if (get_block_num(_lib) < get_block_num(proof.best_block)) {
             _last_prooved_block_num = get_block_num(proof.best_block);
             _finality_channel->send(proof.best_block);
-            bcast(proof_msg(proof, _private_key));
+            bcast(proof_msg(proof, _signature_provider));
         }
     }
 
     void new_round(uint32_t round_num, const public_key_type& primary) {
-        _round.reset(new randpa_round(round_num, primary, _prefix_tree, _private_key,
+        _round.reset(new randpa_round(round_num, primary, _prefix_tree, _signature_provider,
         [this](const prevote_msg& msg) {
             bcast(msg);
         },

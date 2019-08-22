@@ -35,7 +35,7 @@ public:
     randpa_round(uint32_t num,
         const public_key_type& primary,
         const prefix_tree_ptr& tree,
-        const private_key_type& private_key,
+        const signature_provider_type& signature_provider,
         prevote_bcaster_type && prevote_bcaster,
         precommit_bcaster_type && precommit_bcaster,
         done_cb_type && done_cb
@@ -43,7 +43,7 @@ public:
         num(num),
         primary(primary),
         tree(tree),
-        private_key(private_key),
+        signature_provider(signature_provider),
         prevote_bcaster(std::move(prevote_bcaster)),
         precommit_bcaster(std::move(precommit_bcaster)),
         done_cb(std::move(done_cb))
@@ -158,7 +158,7 @@ private:
         auto chain = tree->get_branch(last_node->block_id);
 
         auto prevote = prevote_type { num, chain.base_block, std::move(chain.blocks) };
-        auto msg = prevote_msg(prevote, private_key);
+        auto msg = prevote_msg(prevote, signature_provider);
         add_prevote(msg);
         prevote_bcaster(msg);
     }
@@ -169,7 +169,7 @@ private:
         state = state::precommit;
 
         auto precommit = precommit_type { num, best_node->block_id };
-        auto msg = precommit_msg(precommit, private_key);
+        auto msg = precommit_msg(precommit, signature_provider);
 
         add_precommit(msg);
 
@@ -302,7 +302,7 @@ private:
     state state { state::init };
     proof_type proof;
     tree_node_ptr best_node;
-    private_key_type private_key;
+    signature_provider_type signature_provider;
     prevote_bcaster_type prevote_bcaster;
     precommit_bcaster_type precommit_bcaster;
     done_cb_type done_cb;

@@ -14,6 +14,12 @@ using std::unique_ptr;
 using std::make_unique;
 using randpa_ptr = std::unique_ptr<randpa>;
 
+static signature_provider_type make_key_signature_provider(const private_key_type& key) {
+   return [key]( const digest_type& digest ) {
+      return key.sign(digest);
+   };
+}
+
 class RandpaNode: public Node {
 public:
     explicit RandpaNode(int id, Network && net, fork_db && db_, private_key_type private_key):
@@ -111,7 +117,7 @@ private:
             .set_in_net_channel(in_net_ch)
             .set_out_net_channel(out_net_ch)
             .set_finality_channel(finality_ch)
-            .set_private_key(private_key);
+            .set_signature_provider(make_key_signature_provider(private_key), private_key.get_public_key());
     }
 
     net_channel_ptr in_net_ch;
