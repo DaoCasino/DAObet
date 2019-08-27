@@ -21,5 +21,4 @@
     branch = v0.6.0
 [submodule "libraries/fc"]
 	path = libraries/fc
-	url = https://github.com/DaoCasino/fc
-	branch = dao_prefix
+	url = https://github.com/EOSIO/fc
