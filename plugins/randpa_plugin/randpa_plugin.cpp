@@ -282,7 +282,7 @@ void randpa_plugin::plugin_initialize(const variables_map& options) {
     }
 
     const auto key_spec_pair_vector = options["signature-provider"].as<vector<std::string>>();
-    if (!key_spec_pair_vector.empty()) {
+    if (key_spec_pair_vector.empty()) {
         return;
     }
     const std::string key_spec_pair = key_spec_pair_vector[0];
