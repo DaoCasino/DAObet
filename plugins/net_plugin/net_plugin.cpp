@@ -1507,6 +1507,16 @@ namespace eosio {
             c->enqueue( note );
          }
          c->syncing = true;
+         bool on_fork = true;
+         try {
+            on_fork = cc.get_block_id_for_num( msg.head_num ) != msg.head_id;
+         } catch( ... ) {}
+         if( on_fork ) {
+            request_message req;
+            req.req_blocks.mode = catch_up;
+            req.req_trx.mode = none;
+            c->enqueue( req );
+         }
          return;
       }
       fc_elog( logger, "sync check failed to resolve status" );
