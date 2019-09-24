@@ -13,14 +13,14 @@ curl -sk $CONFIG_URL/logger.json -o $NODE_PATH/config/logger.json
 
 
 docker run -d --cap-add IPC_LOCK \
-    --env EOSIO_ROOT=/opt/haya \
+    --env EOSIO_ROOT=/opt/daobet \
     --env LD_LIBRARY_PATH=/usr/local/lib \
-    --env PATH=/opt/haya/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    --env PATH=/opt/daobet/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     --name dao-node \
     --network host \
     --volume $NODE_PATH:/opt/dao:rw \
     $NODE_IMAGE \
-    /opt/haya/bin/haya-node \
+    /opt/daobet/bin/daobet-node \
     --config-dir=/opt/dao/config \
     --genesis-json=/opt/dao/config/genesis.json \
     --logconf=/opt/dao/config/logger.json \
@@ -29,5 +29,5 @@ docker run -d --cap-add IPC_LOCK \
 docker run -d --network host \
     --volume $NODE_PATH:/opt/dao:rw \
     --name dao-wallet $NODE_IMAGE \
-    /opt/haya/bin/haya-wallet \
+    /opt/daobet/bin/daobet-wallet \
     --http-server-address 127.0.0.1:8899

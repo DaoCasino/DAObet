@@ -1,4 +1,4 @@
-add_executable( haya-launcher main.cpp )
+add_executable( daobet-launcher main.cpp )
 if( UNIX AND NOT APPLE )
   set(rt_library rt )
 endif()
@@ -26,13 +26,13 @@ endif()
 
 configure_file(config.hpp.in config.hpp ESCAPE_QUOTES)
 
-target_include_directories(haya-launcher PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(daobet-launcher PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
 
-target_link_libraries(haya-launcher
+target_link_libraries(daobet-launcher
                       PRIVATE eosio_chain fc ${CMAKE_DL_LIBS} ${PLATFORM_SPECIFIC_LIBS} )
 
 install( TARGETS
-   haya-launcher
+   daobet-launcher
 
    RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
    LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}

@@ -1,7 +1,7 @@
 set(VENDOR "mixbytes")
-set(PROJECT_NAME "haya")
+set(PROJECT_NAME "daobet")
 set(DESC "blockchain software")
-set(URL "https://github.com/mixbytes/haya")
+set(URL "https://github.com/DaoCasino/DAObet")
 set(EMAIL "hello@mixbytes.io")
 
 configure_file(${CMAKE_SOURCE_DIR}/scripts/generate_package.sh.in ${CMAKE_BINARY_DIR}/packages/generate_package.sh @ONLY)

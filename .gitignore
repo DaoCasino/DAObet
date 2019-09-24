@@ -63,7 +63,7 @@ tests/plugin_test
 unittests/unit_test
 
 doxygen
-haya.doxygen
+daobet.doxygen
 
 wallet.json
 witness_node_data_dir
