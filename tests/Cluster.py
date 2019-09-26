@@ -30,7 +30,7 @@ class Cluster(object):
     __BiosPort=8788
     __LauncherCmdArr=[]
     __bootlog="eosio-ignition-wd/bootlog.txt"
-    __configDir="etc/haya/"
+    __configDir="etc/daobet/"
     __dataDir="var/lib/"
 
     # pylint: disable=too-many-arguments

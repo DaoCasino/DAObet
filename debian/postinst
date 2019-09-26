@@ -8,8 +8,8 @@
 
 set -e
 
-PACKAGE="haya"
-USER="haya"
+PACKAGE="daobet"
+USER="daobet"
 GROUP=${USER}
 
 # summary of how this script can be called:
@@ -40,8 +40,8 @@ case "$1" in
     chown ${USER}:${GROUP} /var/lib/${PACKAGE}
     chown ${USER}:${GROUP} /etc/${PACKAGE}
     chown ${USER}:${GROUP} /etc/${PACKAGE}/node_00
-    chown ${USER} /usr/bin/haya-node
-    chmod u+s /usr/bin/haya-node
+    chown ${USER} /usr/bin/daobet-node
+    chmod u+s /usr/bin/daobet-node
   ;;
 
   abort-upgrade|abort-remove|abort-deconfigure)

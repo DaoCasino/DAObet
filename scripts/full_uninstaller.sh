@@ -1,7 +1,7 @@
 #! /bin/bash
 ANSWER=0
 if [[ $1 =~ force-* ]]; then FORCED=1; else FORCED=0; fi
-if [ -d "/usr/local/include/haya" ] || [ -d "$HOME/opt/haya" ] || [ $FORCED == 1 ]; then # use force for running the script directly
+if [ -d "/usr/local/include/daobet" ] || [ -d "$HOME/opt/daobet" ] || [ $FORCED == 1 ]; then # use force for running the script directly
    printf "\nEOSIO installation (AND DEPENDENCIES) already found...\n"
    if [ $1 == 0 ]; then
       read -p "Do you wish to remove them? (this includes dependencies)? (y/n) " ANSWER
@@ -11,9 +11,9 @@ if [ -d "/usr/local/include/haya" ] || [ -d "$HOME/opt/haya" ] || [ $FORCED == 1
    echo "Uninstalling..."
    case $ANSWER in
       1 | [Yy]* )
-         if [ -d "$HOME/opt/haya" ] || [[ $1 == "force-new" ]]; then
+         if [ -d "$HOME/opt/daobet" ] || [[ $1 == "force-new" ]]; then
             if [ $( uname ) == "Darwin" ]; then
-               # gettext and other brew packages are not modified as they can be dependencies for things other than haya
+               # gettext and other brew packages are not modified as they can be dependencies for things other than daobet
                if [ $ANSWER != 1 ]; then read -p "Do you wish to uninstall and unlink all brew installed llvm@4 versions? (y/n) " ANSWER; fi
                case $ANSWER in
                   1 | [Yy]* )
@@ -51,9 +51,9 @@ if [ -d "/usr/local/include/haya" ] || [ -d "$HOME/opt/haya" ] || [ $FORCED == 1
                   * ) echo "Please type 'y' for yes or 'n' for no."; exit;;
                esac
             fi
-            rm -rf $HOME/opt/haya
+            rm -rf $HOME/opt/daobet
             rm -f $HOME/bin/eosio-launcher
-            rm -rf $HOME/lib/cmake/haya
+            rm -rf $HOME/lib/cmake/daobet
             rm -rf $HOME/opt/llvm
             rm -f $HOME/opt/boost
             rm -rf $HOME/src/boost_*
@@ -65,7 +65,7 @@ if [ -d "/usr/local/include/haya" ] || [ -d "$HOME/opt/haya" ] || [ $FORCED == 1
             rm -rf $HOME/src/mongo*
          fi
 
-         if [ -d "/usr/local/include/haya" ] || [[ $1 == "force-old" ]]; then
+         if [ -d "/usr/local/include/daobet" ] || [[ $1 == "force-old" ]]; then
             if [ "$(id -u)" -ne 0 ]; then
                printf "\nCleanup requires sudo... Please manually run ./scripts/clean_old_install.sh with sudo.\n"
                exit -1
@@ -74,10 +74,10 @@ if [ -d "/usr/local/include/haya" ] || [ -d "$HOME/opt/haya" ] || [ $FORCED == 1
             rm -rf wasm
             pushd include &> /dev/null
             rm -rf libbson-1.0 libmongoc-1.0 mongocxx bsoncxx appbase chainbase eosio.system eosiolib fc libc++ musl secp256k* 2>/dev/null
-            rm -rf haya 2>/dev/null
+            rm -rf daobet 2>/dev/null
             popd &> /dev/null
             pushd bin &> /dev/null
-            rm cleos eosio-abigen eosio-applesedemo eosio-launcher eosio-s2wasm eosio-wast2wasm eosiocpp haya-node haya-wallet 2>/dev/null
+            rm cleos eosio-abigen eosio-applesedemo eosio-launcher eosio-s2wasm eosio-wast2wasm eosiocpp daobet-node daobet-wallet 2>/dev/null
             popd &> /dev/null
             libraries=(
                libeosio_testing
@@ -110,19 +110,19 @@ if [ -d "/usr/local/include/haya" ] || [ -d "$HOME/opt/haya" ] || [ $FORCED == 1
             done
             popd &> /dev/null
             pushd etc &> /dev/null
-            rm haya 2>/dev/null
+            rm daobet 2>/dev/null
             popd &> /dev/null
             pushd share &> /dev/null
-            rm haya 2>/dev/null
+            rm daobet 2>/dev/null
             popd &> /dev/null
             pushd usr/share &> /dev/null
-            rm haya 2>/dev/null
+            rm daobet 2>/dev/null
             popd &> /dev/null
             pushd var/lib &> /dev/null
-            rm haya 2>/dev/null
+            rm daobet 2>/dev/null
             popd &> /dev/null
             pushd var/log &> /dev/null
-            rm haya 2>/dev/null
+            rm daobet 2>/dev/null
             popd &> /dev/null
          fi
       ;;

@@ -38,7 +38,7 @@ testSuccessful=False
 def runNodeosAndGetOutput(myTimeout=3):
     """Startup nodeos, wait for timeout (before forced shutdown) and collect output. Stdout, stderr and return code are returned in a dictionary."""
     Print("Launching nodeos process.")
-    cmd="programs/haya-node/haya-node --config-dir etc/haya/node_bios --data-dir var/lib/node_bios --verbose-http-errors --http-validate-host=false"
+    cmd="programs/daobet-node/daobet-node --config-dir etc/daobet/node_bios --data-dir var/lib/node_bios --verbose-http-errors --http-validate-host=false"
     Print("cmd: %s" % (cmd))
     proc=subprocess.Popen(cmd.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if debug: Print("Nodeos process launched.")

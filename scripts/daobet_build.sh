@@ -1,7 +1,7 @@
 #!/bin/bash
 ##########################################################################
 # This is the EOSIO automated install script for Linux and Mac OS.
-# This file was downloaded from https://github.com/EOSIO/eos
+# This file was downloaded from https://github.com/DaoCasino/DAObet
 #
 # Copyright (c) 2017, Respective Authors all rights reserved.
 #
@@ -27,7 +27,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 #
-# https://github.com/EOSIO/eos/blob/master/LICENSE
+# https://github.com/DaoCasino/DAObet/blob/master/LICENSE
 ##########################################################################
 
 VERSION=2.1 # Build script version
@@ -165,7 +165,7 @@ fi
 
 if [ ! -d "${REPO_ROOT}/.git" ]; then
    printf "\\nThis build script only works with sources cloned from git\\n"
-   printf "Please clone a new haya directory with 'git clone https://github.com/mixbytes/haya --recursive'\\n"
+   printf "Please clone a new daobet directory with 'git clone https://github.com/DaoCasino/DAObet --recursive'\\n"
    exit 1
 fi
 
@@ -208,38 +208,38 @@ if [ "$ARCH" == "Linux" ]; then
    fi
    case "$OS_NAME" in
       "Amazon Linux AMI"|"Amazon Linux")
-         FILE="${REPO_ROOT}/scripts/haya_build_amazon.sh"
+         FILE="${REPO_ROOT}/scripts/daobet_build_amazon.sh"
          CXX_COMPILER=g++
          C_COMPILER=gcc
       ;;
       "CentOS Linux")
-         FILE="${REPO_ROOT}/scripts/haya_build_centos.sh"
+         FILE="${REPO_ROOT}/scripts/daobet_build_centos.sh"
          CXX_COMPILER=g++
          C_COMPILER=gcc
       ;;
       "elementary OS")
-         FILE="${REPO_ROOT}/scripts/haya_build_ubuntu.sh"
+         FILE="${REPO_ROOT}/scripts/daobet_build_ubuntu.sh"
          CXX_COMPILER=clang++-4.0
          C_COMPILER=clang-4.0
       ;;
       "Fedora")
          export CPATH=/usr/include/llvm4.0:$CPATH # llvm4.0 for fedora package path inclusion
-         FILE="${REPO_ROOT}/scripts/haya_build_fedora.sh"
+         FILE="${REPO_ROOT}/scripts/daobet_build_fedora.sh"
          CXX_COMPILER=g++
          C_COMPILER=gcc
       ;;
       "Linux Mint")
-         FILE="${REPO_ROOT}/scripts/haya_build_ubuntu.sh"
+         FILE="${REPO_ROOT}/scripts/daobet_build_ubuntu.sh"
          CXX_COMPILER=clang++-4.0
          C_COMPILER=clang-4.0
       ;;
       "Ubuntu")
-         FILE="${REPO_ROOT}/scripts/haya_build_ubuntu.sh"
+         FILE="${REPO_ROOT}/scripts/daobet_build_ubuntu.sh"
          CXX_COMPILER=clang++-4.0
          C_COMPILER=clang-4.0
       ;;
       "Debian GNU/Linux")
-         FILE="${REPO_ROOT}/scripts/haya_build_ubuntu.sh"
+         FILE="${REPO_ROOT}/scripts/daobet_build_ubuntu.sh"
          CXX_COMPILER=clang++-4.0
          C_COMPILER=clang-4.0
       ;;
@@ -256,7 +256,7 @@ if [ "$ARCH" == "Darwin" ]; then
    # opt/gettext: cleos requires Intl, which requires gettext; it's keg only though and we don't want to force linking: https://github.com/EOSIO/eos/issues/2240#issuecomment-396309884
    # HOME/lib/cmake: mongo_db_plugin.cpp:25:10: fatal error: 'bsoncxx/builder/basic/kvp.hpp' file not found
    LOCAL_CMAKE_FLAGS="-DCMAKE_PREFIX_PATH=/usr/local/opt/gettext;$HOME/lib/cmake ${LOCAL_CMAKE_FLAGS}" 
-   FILE="${REPO_ROOT}/scripts/haya_build_darwin.sh"
+   FILE="${REPO_ROOT}/scripts/daobet_build_darwin.sh"
    CXX_COMPILER=clang++
    C_COMPILER=clang
    OPENSSL_ROOT_DIR=/usr/local/opt/openssl
@@ -282,7 +282,7 @@ $CMAKE -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" -DCMAKE_CXX_COMPILER="${CXX_COMP
    -DCMAKE_C_COMPILER="${C_COMPILER}" -DCORE_SYMBOL_NAME="${CORE_SYMBOL_NAME}" \
    -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}" -DBUILD_MONGO_DB_PLUGIN=true \
    -DENABLE_COVERAGE_TESTING="${ENABLE_COVERAGE_TESTING}" -DBUILD_DOXYGEN="${DOXYGEN}" \
-   -DCMAKE_INSTALL_PREFIX=$OPT_LOCATION/haya -DENABLE_TX_SPONSORSHIP=1 $LOCAL_CMAKE_FLAGS "${REPO_ROOT}"
+   -DCMAKE_INSTALL_PREFIX=$OPT_LOCATION/daobet -DENABLE_TX_SPONSORSHIP=1 $LOCAL_CMAKE_FLAGS "${REPO_ROOT}"
 if [ $? -ne 0 ]; then exit -1; fi
 make -j"${JOBS}"
 if [ $? -ne 0 ]; then exit -1; fi
@@ -301,7 +301,7 @@ printf "| |    | | | |    | |        | | | |    | |\n"
 printf "| |    | | | |    | |  ______/ | | |    | |\n"
 printf "|_|    |_| |_|    |_|  \______/  |_|    |_|\n\n${txtrst}"
 
-printf "\\HAYA has been successfully built. %02d:%02d:%02d\\n" $(($TIME_END/3600)) $(($TIME_END%3600/60)) $(($TIME_END%60))
+printf "\\daobet has been successfully built. %02d:%02d:%02d\\n" $(($TIME_END/3600)) $(($TIME_END%3600/60)) $(($TIME_END%60))
 printf "==============================================================================================\\n${bldred}"
 printf "(Optional) Testing Instructions:\\n"
 print_instructions
@@ -309,5 +309,5 @@ printf "${BIN_LOCATION}/mongod --dbpath ${MONGODB_DATA_LOCATION} -f ${MONGODB_CO
 printf "cd ./build && PATH=\$PATH:$HOME/opt/mongodb/bin make test\\n" # PATH is set as currently 'mongo' binary is required for the mongodb test
 printf "${txtrst}==============================================================================================\\n"
 printf "For more information:\\n"
-printf "Haya Github: https://github.com/mixbytes/haya\\n"
+printf "daobet Github: https://github.com/DaoCasino/DAObet\\n"
 
