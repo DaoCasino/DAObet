@@ -9,7 +9,7 @@ if(CCACHE_FOUND)
     message(WARNING "CCACHE FOUND")
     set(CMAKE_CXX_COMPILER_LAUNCHER ccache)
     set(CMAKE_C_COMPILER_LAUNCHER ccache)
-endif(CCACHE_FOUND)
+endif()
 
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
    message(WARNING "CMAKE_INSTALL_PREFIX is set to default path of ${CMAKE_INSTALL_PREFIX}, resetting to ${CMAKE_INSTALL_PREFIX}/daobet")
@@ -108,7 +108,7 @@ IF( WIN32 )
   SET(BOOST_ROOT $ENV{BOOST_ROOT})
   set(Boost_USE_MULTITHREADED ON)
   set(BOOST_ALL_DYN_LINK OFF) # force dynamic linking for all libraries
-ENDIF(WIN32)
+ENDIF()
 FIND_PACKAGE(Boost 1.67 REQUIRED COMPONENTS
     date_time
     filesystem
@@ -160,13 +160,13 @@ if( WIN32 )
     SET(TCL_LIBS "${TCL_LIBS}${TCL_LIB_PATH}/${TCL_LIB_NAME}g${TCL_LIB_EXT}")
     SET(TCL_LIBRARY ${TCL_LIBS})
 
-else( WIN32 ) # Apple AND Linux
+else() # Apple AND UNIX
 
     if( APPLE )
         # Apple Specific Options Here
         message( STATUS "Configuring EOSIO on OS X" )
         set( CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -Wall -Wno-deprecated-declarations" )
-    else( APPLE )
+    else() # UNIX
         # Linux Specific Options Here
         message( STATUS "Configuring EOSIO on Linux" )
         set( CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -Wall" )
@@ -179,7 +179,7 @@ else( WIN32 ) # Apple AND Linux
                 set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-invalid-partial-specialization" )
             endif()
         endif()
-    endif( APPLE )
+    endif()
 
     if( "${CMAKE_GENERATOR}" STREQUAL "Ninja" )
         if( "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" )
@@ -225,6 +225,9 @@ if ("${EOSIO_ROOT_KEY}" STREQUAL "")
 endif()
 
 message( STATUS "Using '${EOSIO_ROOT_KEY}' as public key for 'eosio' account" )
+
+message(STATUS "CFLAGS:   ${CMAKE_C_FLAGS}")
+message(STATUS "CXXFLAGS: ${CMAKE_CXX_FLAGS}")
 
 add_subdirectory( libraries )
 add_subdirectory( plugins )
