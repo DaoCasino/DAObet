@@ -1,8 +1,12 @@
 #pragma once
 #include "network_messages.hpp"
 #include "round.hpp"
+
 #include <fc/exception/exception.hpp>
 #include <fc/io/json.hpp>
+
+#include <boost/circular_buffer.hpp>
+
 #include <queue>
 #include <chrono>
 #include <atomic>
@@ -161,7 +165,9 @@ public:
     static constexpr uint32_t msg_expiration_ms = 1000;
 
 public:
-    randpa() {
+    randpa()
+        : _last_proofs{_proofs_cache_size}
+    {
         auto private_key = private_key_type::generate();
         _signature_provider = [private_key](const digest_type& digest) {
             return private_key.sign(digest);
@@ -234,17 +240,22 @@ public:
     }
 
 private:
+    static constexpr size_t _proofs_cache_size = 2; ///< how much last proofs to keep; @see _last_proofs
+
     std::unique_ptr<std::thread> _thread_ptr;
     std::atomic<bool> _done { false };
     signature_provider_type _signature_provider;
     public_key_type _public_key;
     prefix_tree_ptr _prefix_tree;
     randpa_round_ptr _round;
-    block_id_type _lib;
+    block_id_type _lib;                              // last irreversible block
     uint32_t _last_prooved_block_num { 0 };
     std::map<public_key_type, uint32_t> _peers;
-    std::map<public_key_type, std::set<digest_type>> known_messages;
+    std::map<public_key_type, std::set<digest_type>> _known_messages;
     bool _provided_bp_key { false };
+    /// Proof data is invalidated after each round is finished, but other nodes will want to request
+    /// proofs for that round; this cache holds some proofs to reply such requests.
+    boost::circular_buffer<proof_type> _last_proofs;
 
 #ifndef SYNC_RANDPA
     message_queue<randpa_message> _message_queue;
@@ -278,7 +289,7 @@ private:
     template <typename T>
     void send(uint32_t ses_id, const T & msg) {
         auto net_msg = randpa_net_msg { ses_id, msg };
-        dlog("Randpa net message sended, type: ${type}, ses_id: ${ses_id}",
+        dlog("Randpa net message sent, type: ${type}, ses_id: ${ses_id}",
             ("type", net_msg.data.which())
             ("ses_id", ses_id)
         );
@@ -289,9 +300,9 @@ private:
     void bcast(const T & msg) {
         auto msg_hash = digest_type::hash(msg);
         for (const auto& peer: _peers) {
-            if (!known_messages[peer.first].count(msg_hash)) {
+            if (!_known_messages[peer.first].count(msg_hash)) {
                 send(peer.second, msg);
-                known_messages[peer.first].insert(msg_hash);
+                _known_messages[peer.first].insert(msg_hash);
             }
         }
     }
@@ -352,7 +363,13 @@ private:
                 break;
             case randpa_net_msg_data::tag<handshake_ans_msg>::value:
                 on(ses_id, data.get<handshake_ans_msg>());
-               break;
+                break;
+            case randpa_net_msg_data::tag<finality_notice_msg>::value:
+                on(ses_id, data.get<finality_notice_msg>());
+                break;
+            case randpa_net_msg_data::tag<finality_req_proof_msg>::value:
+                on(ses_id, data.get<finality_req_proof_msg>());
+                break;
             default:
                 wlog("Randpa message received, but handler not found, type: ${type}",
                     ("type", data.which())
@@ -451,10 +468,31 @@ private:
         return precommited_keys.size() > node->active_bp_keys.size() * 2 / 3;
     }
 
+    void on(uint32_t ses_id, const finality_notice_msg& msg) {
+        const auto& data = msg.data;
+        dlog("Randpa finality_notice_msg received for block ${bid}", ("bid", data.best_block));
+        if (is_active_bp(data.best_block) && get_block_num(data.best_block) == _last_prooved_block_num) {
+            dlog("no need to get finality proof for block producer node");
+            return;
+        }
+        send(ses_id, finality_req_proof_msg{{_round->get_num()}, _signature_provider});
+    }
+
+    void on(uint32_t ses_id, const finality_req_proof_msg& msg) {
+        const auto& data = msg.data;
+        dlog("Randpa finality_req_proof_msg received for round ${r}", ("r", data.round_num));
+        for (const auto& proof : _last_proofs) {
+            if (proof.round_num == data.round_num) {
+                dlog("proof found; sending it");
+                send(ses_id, proof_msg{proof, _signature_provider});
+                break;
+            }
+        }
+    }
+
     void on(uint32_t ses_id, const proof_msg& msg) {
         const auto& proof = msg.data;
-        dlog("Received proof for round ${num}",
-                     ("num", proof.round_num));
+        dlog("Received proof for round ${num}", ("num", proof.round_num));
 
         if (_last_prooved_block_num >= get_block_num(proof.best_block)) {
             dlog("Skipping proof for ${id} cause last prooved block ${lpb} is higher",
@@ -489,9 +527,7 @@ private:
             dlog("Gotta proof for round ${num}", ("num", _round->get_num()));
             _round->set_state(randpa_round::state::done);
         }
-        _finality_channel->send(proof.best_block);
-        _last_prooved_block_num = get_block_num(proof.best_block);
-        bcast(msg);
+        on_proof_gained(proof);
     }
 
     void on(uint32_t ses_id, const handshake_msg& msg) {
@@ -574,6 +610,15 @@ private:
         send(event.ses_id, msg);
     }
 
+    void on_proof_gained(const proof_type& proof) {
+        _last_proofs.push_front(proof);
+        dlog("cached proof for block ${b}", ("b", proof.best_block));
+
+        _last_prooved_block_num = get_block_num(proof.best_block);
+        _finality_channel->send(proof.best_block);
+        bcast(finality_notice_msg{{_round->get_num(), proof.best_block}, _signature_provider});
+    }
+
     template <typename T>
     void process_round_msg(uint32_t ses_id, const T& msg) {
         auto last_round_num = round_num(_prefix_tree->get_head()->block_id);
@@ -584,7 +629,7 @@ private:
 
         auto msg_hash = digest_type::hash(msg);
 
-        if (known_messages[_public_key].count(msg_hash)) {
+        if (_known_messages[_public_key].count(msg_hash)) {
             dlog("Message already known");
             return;
         }
@@ -595,7 +640,7 @@ private:
         }
 
         _round->on(msg);
-        known_messages[_public_key].insert(msg_hash);
+        _known_messages[_public_key].insert(msg_hash);
     }
 
     uint32_t round_num(const block_id_type& block_id) const {
@@ -649,7 +694,7 @@ private:
             return;
         }
 
-        auto proof = _round->get_proof();
+        const auto& proof = _round->get_proof();
         ilog("Randpa round reached supermajority, round num: ${n}, best block id: ${b}, best block num: ${bn}",
             ("n", proof.round_num)
             ("b", proof.best_block)
@@ -657,10 +702,9 @@ private:
         );
 
         if (get_block_num(_lib) < get_block_num(proof.best_block)) {
-            _last_prooved_block_num = get_block_num(proof.best_block);
-            _finality_channel->send(proof.best_block);
-            bcast(proof_msg(proof, _signature_provider));
+            on_proof_gained(proof);
         }
+        dlog("round ${r} finished", ("r", _round->get_num()));
     }
 
     void new_round(uint32_t round_num, const public_key_type& primary) {
@@ -677,7 +721,7 @@ private:
     }
 
     void remove_round() {
-        known_messages.clear();
+        _known_messages.clear();
         _prefix_tree->remove_confirmations();
         _round.reset();
     }

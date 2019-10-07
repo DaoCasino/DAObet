@@ -1,4 +1,5 @@
 #pragma once
+
 #include "types.hpp"
 #include "prefix_chain_tree.hpp"
 #include "network_messages.hpp"
@@ -16,13 +17,12 @@ using randpa_round_ptr = std::shared_ptr<class randpa_round>;
 class randpa_round {
 public:
     enum class state {
-        init, // init state
-        prevote, // prevote state (init -> prevote)
-        ready_to_precommit, // ready to precommit (prevote -> ready_to_precommit)
-        precommit, // precommit stage (ready_to_precommit -> precommit)
-        done,   // we have supermajority (precommit -> done)
-        fail,   // we failed (precommit -> fail | prevote -> fail)
-        finished, // after finish
+        init,               // init -> prevote
+        prevote,            // prevote -> ready_to_precommit | fail
+        ready_to_precommit, // ready_to_precommit -> precommit
+        precommit,          // precommit -> done | fail
+        done,               // (gained supermajority)
+        fail,               // (failed)
     };
 
 

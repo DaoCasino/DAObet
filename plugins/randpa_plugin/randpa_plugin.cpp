@@ -67,6 +67,8 @@ public:
         subscribe<prevote_msg>(in_net_ch);
         subscribe<precommit_msg>(in_net_ch);
         subscribe<proof_msg>(in_net_ch);
+        subscribe<finality_notice_msg>(in_net_ch);
+        subscribe<finality_req_proof_msg>(in_net_ch);
 
         _on_accepted_block_handle = app().get_channel<channels::accepted_block>()
         .subscribe( [ev_ch, this]( block_state_ptr s ) {
@@ -122,11 +124,21 @@ public:
                     app().get_plugin<telemetry_plugin>()
                         .update_counter("randpa_net_out_handshake_ans_cnt");
                     break;
+                case randpa_net_msg_data::tag<finality_notice_msg>::value:
+                    send(msg.ses_id, data.get<finality_notice_msg>());
+                    app().get_plugin<telemetry_plugin>()
+                        .update_counter("randpa_net_out_finality_notice_cnt");
+                    break;
+                case randpa_net_msg_data::tag<finality_req_proof_msg>::value:
+                    send(msg.ses_id, data.get<finality_req_proof_msg>());
+                    app().get_plugin<telemetry_plugin>()
+                        .update_counter("randpa_net_out_finality_req_proof_cnt");
+                    break;
                 default:
                     wlog("randpa message sent, but handler not found, type: ${type}",
                         ("type", data.which())
                     );
-                break;
+                    break;
             }
             app().get_plugin<telemetry_plugin>()
                 .update_counter("randpa_net_out_total_cnt");
@@ -151,6 +163,8 @@ public:
         app().get_plugin<telemetry_plugin>().add_counter("randpa_net_in_proof_cnt");
         app().get_plugin<telemetry_plugin>().add_counter("randpa_net_in_handshake_cnt");
         app().get_plugin<telemetry_plugin>().add_counter("randpa_net_in_handshake_ans_cnt");
+        app().get_plugin<telemetry_plugin>().add_counter("randpa_net_in_finality_notice_cnt");
+        app().get_plugin<telemetry_plugin>().add_counter("randpa_net_in_finality_req_proof_cnt");
 
         app().get_plugin<telemetry_plugin>().add_counter("randpa_net_out_total_cnt");
         app().get_plugin<telemetry_plugin>().add_counter("randpa_net_out_prevote_cnt");
@@ -158,6 +172,8 @@ public:
         app().get_plugin<telemetry_plugin>().add_counter("randpa_net_out_proof_cnt");
         app().get_plugin<telemetry_plugin>().add_counter("randpa_net_out_handshake_cnt");
         app().get_plugin<telemetry_plugin>().add_counter("randpa_net_out_handshake_ans_cnt");
+        app().get_plugin<telemetry_plugin>().add_counter("randpa_net_out_finality_notice_cnt");
+        app().get_plugin<telemetry_plugin>().add_counter("randpa_net_out_finality_req_proof_cnt");
 
         _randpa.start(copy_fork_db());
     }
@@ -233,6 +249,14 @@ public:
                     app().get_plugin<telemetry_plugin>()
                         .update_counter("randpa_net_in_handshake_ans_cnt");
                     break;
+                case randpa_net_msg_data::tag<finality_notice_msg>::value:
+                    app().get_plugin<telemetry_plugin>()
+                        .update_counter("randpa_net_in_finality_notice_cnt");
+                    break;
+                case randpa_net_msg_data::tag<finality_req_proof_msg>::value:
+                    app().get_plugin<telemetry_plugin>()
+                        .update_counter("randpa_net_in_finality_req_proof_cnt");
+                    break;
             }
             app().get_plugin<telemetry_plugin>()
                 .update_counter("randpa_net_in_total_cnt");
@@ -241,12 +265,9 @@ public:
 };
 
 
-randpa_plugin::randpa_plugin():my(new randpa_plugin_impl()){}
-randpa_plugin::~randpa_plugin(){}
+randpa_plugin::randpa_plugin() : my(new randpa_plugin_impl()) {}
+randpa_plugin::~randpa_plugin() {}
 
-void randpa_plugin::set_program_options(options_description& /*cli*/, options_description& cfg) {
-
-}
 
 static signature_provider_type make_key_signature_provider(const private_key_type& key) {
    return [key]( const chain::digest_type& digest ) {
@@ -314,4 +335,4 @@ void randpa_plugin::plugin_shutdown() {
     my->stop();
 }
 
-}
+} // namespace eosio
