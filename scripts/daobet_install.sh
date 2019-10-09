@@ -1,7 +1,7 @@
 #!/bin/bash
 ##########################################################################
 # This is the EOSIO automated install script for Linux and Mac OS.
-# This file was downloaded from https://github.com/mixbytes/haya
+# This file was downloaded from https://github.com/DaoCasino/dc-blockchain
 #
 # Copyright (c) 2017, Respective Authors all rights reserved.
 #
@@ -27,7 +27,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 #
-# https://github.com/mixbytes/haya/blob/master/LICENSE.txt
+# https://github.com/mixbytes/daobet/blob/master/LICENSE.txt
 ##########################################################################
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -41,7 +41,7 @@ mkdir -p $LIB_LOCATION
 
 CMAKE_BUILD_TYPE=Release
 TIME_BEGIN=$( date -u +%s )
-INSTALL_PREFIX=$OPT_LOCATION/haya
+INSTALL_PREFIX=$OPT_LOCATION/daobet
 VERSION=1.2
 
 txtbld=$(tput bold)
@@ -49,7 +49,7 @@ bldred=${txtbld}$(tput setaf 1)
 txtrst=$(tput sgr0)
 
 if [ ! -d $BUILD_DIR ]; then
-   printf "\\nError, haya_build.sh has not ran.  Please run ./haya_build.sh first!\\n\\n"
+   printf "\\nError, daobet_build.sh has not ran.  Please run ./daobet_build.sh first!\\n\\n"
    exit -1
 fi
 
@@ -59,7 +59,7 @@ if ! pushd "${BUILD_DIR}" &> /dev/null;then
 fi
 
 if ! make install; then
-   printf "\\nMAKE installing EOSIO has exited with the above error.\\n\\n"
+   printf "\\nMAKE installing DAOBET has exited with the above error.\\n\\n"
    exit -1
 fi
 popd &> /dev/null 
@@ -75,8 +75,8 @@ printf "| |    | | | |    | |  ______/ | | |    | |\n"
 printf "|_|    |_| |_|    |_|  \______/  |_|    |_|\n\n${txtrst}"
 
 printf "==============================================================================================\\n"
-printf "HAYA has been installed into ${OPT_LOCATION}/haya/bin!\\n"
-printf "If you need to, you can fully uninstall using haya_uninstall.sh && scripts/clean_old_install.sh.\\n"
+printf "daobet has been installed into ${OPT_LOCATION}/daobet/bin!\\n"
+printf "If you need to, you can fully uninstall using daobet_uninstall.sh && scripts/clean_old_install.sh.\\n"
 printf "==============================================================================================\\n\\n"
 
-printf "Haya Github: https://github.com/mixbytes/haya\\n"
+printf "daobet Github: https://github.com/DaoCasino/dc-blockchain\\n"

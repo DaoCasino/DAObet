@@ -199,6 +199,7 @@ public:
         _signature_provider = signature_provider;
         _public_key = public_key;
         _provided_bp_key = true;
+        dlog("set signature provider: ${p}", ("p", public_key));
         return *this;
     }
 
@@ -471,11 +472,11 @@ private:
     void on(uint32_t ses_id, const finality_notice_msg& msg) {
         const auto& data = msg.data;
         dlog("Randpa finality_notice_msg received for block ${bid}", ("bid", data.best_block));
-        if (is_active_bp(data.best_block) && get_block_num(data.best_block) == _last_prooved_block_num) {
+        if (is_active_bp(data.best_block) && get_block_num(data.best_block) <= _last_prooved_block_num) {
             dlog("no need to get finality proof for block producer node");
             return;
         }
-        send(ses_id, finality_req_proof_msg{{_round->get_num()}, _signature_provider});
+        send(ses_id, finality_req_proof_msg{{data.round_num}, _signature_provider});
     }
 
     void on(uint32_t ses_id, const finality_req_proof_msg& msg) {
@@ -576,6 +577,7 @@ private:
         }
 
         if (should_start_round(event.block_id)) {
+            dlog("starting new round");
             remove_round();
 
             if (is_active_bp(event.block_id)) {
@@ -616,7 +618,8 @@ private:
 
         _last_prooved_block_num = get_block_num(proof.best_block);
         _finality_channel->send(proof.best_block);
-        bcast(finality_notice_msg{{_round->get_num(), proof.best_block}, _signature_provider});
+
+        bcast(finality_notice_msg{{proof.round_num, proof.best_block}, _signature_provider});
     }
 
     template <typename T>
@@ -635,7 +638,7 @@ private:
         }
 
         if (!_round) {
-            dlog("Randpa round does not exists");
+            dlog("Randpa round does not exist");
             return;
         }
 

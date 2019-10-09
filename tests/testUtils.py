@@ -18,21 +18,21 @@ class Utils:
     Debug=False
     FNull = open(os.devnull, 'w')
 
-    EosClientPath="programs/haya-cli/haya-cli"
+    EosClientPath="programs/daobet-cli/daobet-cli"
     MiscEosClientArgs="--no-auto-keosd"
 
-    EosWalletName="haya-wallet"
-    EosWalletPath="programs/haya-wallet/"+ EosWalletName
+    EosWalletName="daobet-wallet"
+    EosWalletPath="programs/daobet-wallet/"+ EosWalletName
 
-    EosServerName="haya-node"
-    EosServerPath="programs/haya-node/"+ EosServerName
+    EosServerName="daobet-node"
+    EosServerPath="programs/daobet-node/"+ EosServerName
 
-    EosLauncherPath="programs/haya-launcher/haya-launcher"
+    EosLauncherPath="programs/daobet-launcher/daobet-launcher"
     MongoPath="mongo"
     ShuttingDown=False
     CheckOutputDeque=deque(maxlen=10)
 
-    EosBlockLogPath="programs/haya-blocklog/haya-blocklog"
+    EosBlockLogPath="programs/daobet-blocklog/daobet-blocklog"
 
     FileDivider="================================================================="
 

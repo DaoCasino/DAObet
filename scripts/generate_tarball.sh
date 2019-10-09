@@ -5,7 +5,7 @@ EOS_PREFIX=${PREFIX}/${SUBPREFIX}
 mkdir -p ${PREFIX}/bin/
 #mkdir -p ${PREFIX}/lib/cmake/${PROJECT}
 mkdir -p ${EOS_PREFIX}/bin
-mkdir -p ${EOS_PREFIX}/licenses/haya
+mkdir -p ${EOS_PREFIX}/licenses/daobet
 #mkdir -p ${EOS_PREFIX}/include
 #mkdir -p ${EOS_PREFIX}/lib/cmake/${PROJECT}
 #mkdir -p ${EOS_PREFIX}/cmake
@@ -15,7 +15,7 @@ mkdir -p ${EOS_PREFIX}/licenses/haya
 cp -R ${BUILD_DIR}/bin/* ${EOS_PREFIX}/bin  || exit 1
 
 # install licenses
-cp -R ${BUILD_DIR}/licenses/haya/* ${EOS_PREFIX}/licenses || exit 1
+cp -R ${BUILD_DIR}/licenses/daobet/* ${EOS_PREFIX}/licenses || exit 1
 
 # install libraries
 #cp -R ${BUILD_DIR}/lib/* ${EOS_PREFIX}/lib

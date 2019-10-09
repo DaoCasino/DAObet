@@ -26,16 +26,16 @@ jobs:
 
         - cp -r $HOME/.ccache .ccache #copy cache into build context
         - docker build --build-arg registry=mixbytes --build-arg build_type=$BUILD_TYPE -t tmp-builder -f Docker/Dockerfile --target builder .
-        - docker run --rm -v $HOME/.ccache:/out tmp-builder /bin/bash -c "cp -r /haya/.ccache/* /out" #save updated cache
-        - docker build --build-arg registry=mixbytes --build-arg build_type=$BUILD_TYPE  -t mixbytes/haya:$TRAVIS_BRANCH -f Docker/Dockerfile . #build main image
+        - docker run --rm -v $HOME/.ccache:/out tmp-builder /bin/bash -c "cp -r /daobet/.ccache/* /out" #save updated cache
+        - docker build --build-arg registry=mixbytes --build-arg build_type=$BUILD_TYPE  -t mixbytes/daobet:$TRAVIS_BRANCH -f Docker/Dockerfile . #build main image
 
         - if [ "$TRAVIS_PULL_REQUEST" = "false" ] && [ $BUILD_TYPE != "Debug" ]; then docker run tmp-builder /bin/bash -c 'cd /tmp/build && ctest -R "simulator|unit_test"'; fi
         - if [ "$TRAVIS_PULL_REQUEST" != "false" ] && [ $BUILD_TYPE != "Debug" ]; then docker run tmp-builder /bin/bash -c 'cd /tmp/build && ctest -R "simulator|unit_test|nodeos_sanity|nodeos_run" -E "mongo"'; fi
 
-        - docker push mixbytes/haya:$TRAVIS_BRANCH #push main image to registry
+        - docker push mixbytes/daobet:$TRAVIS_BRANCH #push main image to registry
         - |
           if [ $TRAVIS_BRANCH == "master" ]; then
-            docker tag mixbytes/haya:master mixbytes/haya:latest
-            docker push mixbytes/haya:latest
+            docker tag mixbytes/daobet:master mixbytes/daobet:latest
+            docker push mixbytes/daobet:latest
           fi
 

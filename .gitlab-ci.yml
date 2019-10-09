@@ -36,11 +36,11 @@ publish-nomral:
     - schedules
   <<: *docker-login
   script:
-    - docker build -f Docker/Dockerfile -t haya --build-arg registry=${REGISTRY} .
-    - docker tag haya ${REGISTRY}/haya:${CI_COMMIT_SHA:0:8}
-    - docker tag haya ${REGISTRY}/haya:${CI_COMMIT_REF_NAME}-latest
-    - docker tag haya ${REGISTRY}/haya:latest
-    - docker push ${REGISTRY}/haya
+    - docker build -f Docker/Dockerfile -t daobet --build-arg registry=${REGISTRY} .
+    - docker tag daobet ${REGISTRY}/daobet:${CI_COMMIT_SHA:0:8}
+    - docker tag daobet ${REGISTRY}/daobet:${CI_COMMIT_REF_NAME}-latest
+    - docker tag daobet ${REGISTRY}/daobet:latest
+    - docker push ${REGISTRY}/daobet
 
 publish-dev:
   stage: publish to gitlab registry dev
@@ -59,11 +59,11 @@ publish-dev:
     - schedules
   <<: *docker-login
   script:
-    - docker build -f Docker/dev/Dockerfile -t haya-dev --build-arg registry=${REGISTRY} .
-    - docker tag haya-dev ${REGISTRY}/haya-dev:${CI_COMMIT_SHA:0:8}
-    - docker tag haya-dev ${REGISTRY}/haya-dev:${CI_COMMIT_REF_NAME}-latest
-    - docker tag haya-dev ${REGISTRY}/haya-dev:latest
-    - docker push ${REGISTRY}/haya-dev
+    - docker build -f Docker/dev/Dockerfile -t daobet-dev --build-arg registry=${REGISTRY} .
+    - docker tag daobet-dev ${REGISTRY}/daobet-dev:${CI_COMMIT_SHA:0:8}
+    - docker tag daobet-dev ${REGISTRY}/daobet-dev:${CI_COMMIT_REF_NAME}-latest
+    - docker tag daobet-dev ${REGISTRY}/daobet-dev:latest
+    - docker push ${REGISTRY}/daobet-dev
 
 publish-builder:
   stage: publish builder
@@ -85,8 +85,8 @@ publish-builder:
   <<: *docker-login
   script:
     - cd Docker/builder
-    - docker build -t haya-builder .
-    - docker tag haya-builder ${REGISTRY}/haya-builder:${CI_COMMIT_SHA:0:8}
-    - docker tag haya-builder ${REGISTRY}/haya-builder:${CI_COMMIT_REF_NAME}-latest
-    - docker tag haya-builder ${REGISTRY}/haya-builder:latest
-    - docker push ${REGISTRY}/haya-builder
+    - docker build -t daobet-builder .
+    - docker tag daobet-builder ${REGISTRY}/daobet-builder:${CI_COMMIT_SHA:0:8}
+    - docker tag daobet-builder ${REGISTRY}/daobet-builder:${CI_COMMIT_REF_NAME}-latest
+    - docker tag daobet-builder ${REGISTRY}/daobet-builder:latest
+    - docker push ${REGISTRY}/daobet-builder
