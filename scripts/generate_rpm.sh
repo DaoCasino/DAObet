@@ -1,4 +1,5 @@
 #! /bin/bash
+set -e
 
 PREFIX="usr"
 SPREFIX=${PREFIX}
@@ -20,8 +21,9 @@ export SSUBPREFIX
 
 . ./generate_tarball.sh ${NAME}
 
-RPMBUILD=`realpath ~/rpmbuild/BUILDROOT/${NAME}.x86_64`
+RPMBUILD=/root/rpmbuild/BUILDROOT/${NAME}.x86_64
 mkdir -p ${RPMBUILD}
+mkdir -p /root/rpmbuild/BUILD
 FILES=$(tar -xvzf ${NAME}.tar.gz -C ${RPMBUILD})
 PFILES=""
 for f in ${FILES[@]}; do
@@ -29,7 +31,7 @@ for f in ${FILES[@]}; do
     PFILES="${PFILES}/${f}\n"
   fi
 done
-echo -e ${PFILES} &> ~/rpmbuild/BUILD/filenames.txt
+echo -e ${PFILES} &> /root/rpmbuild/BUILD/filenames.txt
 
 mkdir -p ${PROJECT}
 echo -e "Name: ${PROJECT} 

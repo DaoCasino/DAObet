@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+set -e
+
+# Commands:
+# build tools {project_name} {ubuntu,centos}
+# build prod {project_name} {ubuntu,centos}
+# build dev {project_name} {ubuntu,centos}
+# push tools {project_name} {ubuntu,centos}
+
+# COMMON
+ProgName="./cicd/run"
+GIT_TAG=$(git describe --tags --abbrev=1)
+BUILD_DIR=build
+
+PROJECT_NAME=$1
+DIST=$2
+#SHELL=$3
+
+# DOCKER
+BUILD_TOOLS_REGISTRY=$3
+BUILD_TOOLS_TAG="latest"
+
+function priv_build-in-docker(){
+  local _name=$1
+  local _dist=$2
+  local _command="/mnt/src/${_name}/cicd/build-in-docker.sh ${_name} ${_dist}"
+  if [[ $3 == "bash" ]]; then _command="bash"; fi
+  docker run \
+    -v "$(pwd):/mnt/src/${_name}" \
+    -v "$(pwd)/${BUILD_DIR}/${_dist}/.ccache:/root/.ccache" \
+    --rm --name=${_name}-${_dist}-build \
+    -ti ${_name}-${_dist}-build \
+    ${_command}
+}
+
+function sub_help(){
+  _subcommand=$1
+  case $_subcommand in
+    build)
+      echo "Usage: $ProgName build [options] {projact_name}"
+      echo "Options:"
+      echo "    -t   build toolchain for specific platform (-d option required)"
+      echo "    -p   build project and create OS package (-d option required)"
+      echo "    -i   build Docker image"
+      echo "    -s   start Docker container and run shell in specific platform (-d option required)"
+      echo "    -d   target platform {ubuntu,centos}"
+      echo ""
+      echo "Example:"
+      echo "# Build toolchain and project package for Ubuntu"
+      echo "$ProgName build -d ubuntu -t -p haya"
+      echo ""
+      ;;
+    push)
+      echo "Usage: $ProgName push [options] {projact_name}"
+      echo "Options:"
+      echo "    -p   build project and create OS package (-d option required)"
+      echo "    -s   start Docker container and run shell in specific platform (-d option required)"
+      echo ""
+      echo "Example:"
+      echo "# Build toolchain and project package for Ubuntu"
+      echo "$ProgName build -d ubuntu -t -p haya"
+      echo ""
+      ;;
+    *)
+      echo "Usage: $ProgName <subcommand> [options]"
+      echo "Subcommands:"
+      echo "    build   build toolchain and project"
+      echo "    push    Push toolchain and project artifacts to DockerHub and GitHub Releases"
+      echo ""
+      echo "For help with each subcommand run:"
+      echo "$ProgName <subcommand> -h"
+      echo ""
+      ;;
+  esac
+}
+
+function sub_build(){
+  while getopts ":tpishd:" opt; do
+    case ${opt} in
+      h)
+        sub_help build
+        ;;
+      t )
+        build_tools=1
+        ;;
+      p )
+        build_package=1
+        ;;
+      i )
+        build_docker_image=1
+        ;;
+      d )
+        _DIST=$OPTARG
+        ;;
+      s )
+        login_to_container=1
+        if [[ -z $OPTARG ]]; then
+          _SHELL="bash"
+        else
+          _SHELL=$OPTARG
+        fi
+        ;;
+      \? )
+        echo "Invalid Option: -$OPTARG" 1>&2
+        exit 1
+        ;;
+      : )
+        echo "Invalid Option: -$OPTARG requires an argument" 1>&2
+        exit 1
+        ;;
+    esac
+  done
+  shift $((OPTIND -1))
+  local _PROJECT_NAME=$1
+  if [[ build_tools -eq 1 ]]; then
+    echo "Building toolchain!"
+    docker build \
+      --build-arg project_name=${_PROJECT_NAME} \
+      -t ${_PROJECT_NAME}-build-tools-${_DIST}:latest \
+      -f cicd/Dockerfile-${_DIST}-tools .
+  fi
+  if [[ build_package -eq 1 ]]; then
+    echo "Building ${_PROJECT_NAME} and create package for ${_DIST}"
+    local _command="/mnt/src/${_PROJECT_NAME}/cicd/build-in-docker.sh ${_PROJECT_NAME} ${_DIST}"
+    local docker_image="${_PROJECT_NAME}-build-tools-${_DIST}:latest"
+    if [[ login_to_container -eq 1 ]]; then
+      _command=${_SHELL}
+      docker_image="ubuntu:18.04"
+    fi
+    docker run \
+      -v "$(pwd):/mnt/src/${_PROJECT_NAME}" \
+      -v "$(pwd)/${BUILD_DIR}/${_DIST}/.ccache:/root/.ccache" \
+      --rm --name=${_PROJECT_NAME}-${_DIST}-build \
+      -ti ${docker_image} \
+      ${_command}
+    fi
+  if [[ build_docker_image -eq 1 ]]; then
+    docker build --no-cache -t haya-test -f cicd/Dockerfile build/pkgs/
+  fi
+}
+
+function sub_push(){
+  while getopts ":hp:r:f:" opt; do
+    case ${opt} in
+      h)
+        sub_help push
+        ;;
+      p )
+        provider=$OPTARG
+        ;;
+      r )
+        REPO=$OPTARG
+        ;;
+      f )
+        file=$OPTARG
+        ;;
+      d )
+        _DIST=$OPTARG
+        ;;
+      \? )
+        echo "Invalid Option: -$OPTARG" 1>&2
+        exit 1
+        ;;
+      : )
+        echo "Invalid Option: -$OPTARG requires an argument" 1>&2
+        exit 1
+        ;;
+    esac
+  done
+  shift $((OPTIND -1))
+  local _PROJECT_NAME=$1
+  local BODY=""
+  local github_draft="true"
+  local github_prerelease="false"
+  if [[ $provider == "github" ]]; then
+    echo "Uploading asset to GitHub Releases"
+    payload=$(
+      jq --null-input \
+         --arg tag "${GIT_TAG}" \
+         --arg target_commitish "master" \
+         --arg name "${GIT_TAG}" \
+         --arg body "${BODY}" \
+         '{ tag_name: $tag, target_commitish: $target_commitish, name: $name, body: $body, draft: true }'
+    )
+    response=$(
+      curl --fail \
+           --netrc \
+           --silent \
+           --location \
+           --data "$payload" \
+           "https://api.github.com/repos/${REPO}/releases"
+    )
+    upload_url="$(echo "$response" | jq -r .upload_url | sed -e "s/{?name,label}//")"
+    for file in "build"/pkgs/*; do
+      curl --netrc \
+           --silent \
+           --header "Content-Type:application/gzip" \
+           --data-binary "@$file" \
+           "$upload_url?name=$(basename "$file")"
+    done
+
+
+  fi
+}
+
+subcommand=$1
+
+case $subcommand in
+  "" | "-h" | "--help")
+    sub_help
+    ;;
+  *)
+    shift
+    sub_${subcommand} $@
+    if [ $? = 127 ]; then
+      echo "Error: '$subcommand' is not a known subcommand." >&2
+      echo "       Run '$ProgName --help' for a list of known subcommands." >&2
+      exit 1
+    fi
+    ;;
+esac
+

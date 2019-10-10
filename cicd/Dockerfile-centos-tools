@@ -1,0 +1,26 @@
+FROM centos:7
+
+ARG project_name
+
+LABEL author="Andrey Levkin <alevkin@gmail.com>" \
+  maintainer="Andrey Levkin <alevkin@gmail.com> \
+              Some One <someone@mixbytes.io>" \
+  version="0.1.0" \
+  description="Base image for building Haya on CentOS"
+
+COPY . /var/src/${project_name}
+
+WORKDIR /var/src/${project_name}
+
+RUN yum -y update && \
+      yum -y --enablerepo=extras install centos-release-scl && \
+      yum install -y epel-release && \
+      yum update -y --enablerepo=epel && \
+      yum install -y devtoolset-7 git rpm-build ccache \
+      autoconf automake libtool make bzip2 doxygen graphviz \
+      bzip2-devel openssl-devel gmp-devel \
+      ocaml libicu-devel python python-devel python33 \
+      gettext-devel file sudo libusbx-devel libcurl-devel && \
+      git submodule update --init --recursive && \
+      cd scripts && \
+      bash ${project_name}_build.sh -y -t

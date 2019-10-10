@@ -106,9 +106,10 @@ function usage()
 }
 
 NONINTERACTIVE=0
+BUILDTOOLSONLY=0
 
 if [ $# -ne 0 ]; then
-   while getopts ":cdo:s:ahy" opt; do
+   while getopts ":cdo:s:ahyt" opt; do
       case "${opt}" in
          o )
             options=( "Debug" "Release" "RelWithDebInfo" "MinSizeRel" )
@@ -144,6 +145,9 @@ if [ $# -ne 0 ]; then
          ;;
          y)
             NONINTERACTIVE=1
+         ;;
+         t)
+            BUILDTOOLSONLY=1
          ;;
          \? )
             printf "\\nInvalid Option: %s\\n" "-${OPTARG}" 1>&2
@@ -269,6 +273,8 @@ if [ $? -ne 0 ]; then exit -1; fi # Stop if exit from script is not 0
 pushd $SRC_LOCATION &> /dev/null
 . "$FILE" $NONINTERACTIVE # Execute OS specific build file
 popd &> /dev/null
+
+if [ $BUILDTOOLSONLY == "1" ]; then exit 0; fi # Stop when we need prepare only build tools
 
 printf "\\n========================================================================\\n"
 printf "======================= Starting EOSIO Build =======================\\n"

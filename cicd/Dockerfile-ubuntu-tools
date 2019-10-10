@@ -1,0 +1,22 @@
+FROM ubuntu:18.04
+
+ARG project_name
+
+LABEL author="Andrey Levkin <alevkin@gmail.com>" \
+  maintainer="Andrey Levkin <alevkin@gmail.com> \
+              Some One <someone@mixbytes.io>" \
+  version="0.1.0" \
+  description="Base image for building Haya on Ubuntu"
+
+COPY . /var/src/${project_name}
+
+WORKDIR /var/src/${project_name}
+
+RUN apt-get update && \
+      apt-get install -y \
+      sudo git ccache llvm-4.0 clang-4.0 libclang-4.0-dev make automake libbz2-dev libssl-dev doxygen graphviz \
+      libgmp3-dev autotools-dev build-essential libicu-dev python2.7 python2.7-dev python3 python3-dev \
+      autoconf libtool curl zlib1g-dev sudo ruby libusb-1.0-0-dev libcurl4-gnutls-dev pkg-config && \
+      git submodule update --init --recursive && \
+      cd scripts && \
+      bash ${project_name}_build.sh -y -t
