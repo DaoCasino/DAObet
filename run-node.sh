@@ -1,5 +1,5 @@
 NODE_PATH=$HOME/.dao-node
-NODE_IMAGE='daocasino/blockchain:v0.2.3'
+NODE_IMAGE='daocasino/blockchain:v0.3.0'
 CONFIG_URL='https://explorer.daobet.org/config'
 
 read -p "Node data dir: $NODE_PATH, do you want change it? (y/n) " resp
