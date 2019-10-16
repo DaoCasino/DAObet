@@ -63,7 +63,6 @@ info  2019-04-24T11:42:27.003 thread-0  producer_plugin.cpp:1597      produce_bl
 info  2019-04-24T11:42:27.506 thread-0  producer_plugin.cpp:1597      produce_block        ] Produced block 00000008e2d399a5... #8 @ 2019-04-24T11:42:27.500 signed by eosio [trxs: 0, lib: 7, confirmed: 0]
 info  2019-04-24T11:42:27.508 thread-2  randpa.hpp:585                finish_round         ] Randpa round reached supermajority, round num: 3, best block id: 00000007b7dbaaf833cfa95495192a2dd117fb81428c9ba6e25f141a0cd37e19, best block num: 7
 ```
-
 If you see "Randpa reached supermajority" messages then you have successfully launched your node.
 
 ### Run multiple nodes

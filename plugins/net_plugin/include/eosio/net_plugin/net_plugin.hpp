@@ -61,7 +61,7 @@ namespace eosio {
         using new_peer = channel_decl<struct net_new_peer_tag, uint32_t>;
 
       private:
-        std::unique_ptr<class net_plugin_impl> my;
+        std::shared_ptr<class net_plugin_impl> my;
    };
 
 }
