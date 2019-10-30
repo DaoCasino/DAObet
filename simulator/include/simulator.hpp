@@ -19,6 +19,8 @@
 using namespace std;
 using namespace fc::crypto;
 
+enum class node_type {BP, FN};
+
 static ostream& operator<<(ostream& os, const block_id_type& block) {
     os << block.str().substr(16, 4);
     return os;
@@ -220,6 +222,10 @@ public:
         count_dist_matrix();
     }
 
+    void load_nodetypes(const vector<node_type>& tnodes) {
+        nodetypes = tnodes;
+    }
+
     void load_graph_from_file(const char* filename) {
         int instances;
         int from, to, delay;
@@ -338,7 +344,9 @@ public:
         auto instances = get_instances();
 
         for (int i = 0; i < instances; i++) {
-            schedule_producer(now + i * get_slot_ms(), ordering[i]);
+            if(nodetypes.at(i) != node_type::FN) {
+                schedule_producer(now + i * get_slot_ms(), ordering[i]);
+            }
         }
 
         schedule_time = now + instances * get_slot_ms();
@@ -525,6 +533,7 @@ private:
     }
 
     void init_runner_data(int instances) {
+        nodetypes.resize(instances, node_type::BP);
         delay_matrix.resize(instances);
 
         for (int i = 0; i < instances; i++) {
@@ -556,6 +565,7 @@ private:
         }
     }
 
+    vector<node_type> nodetypes;
     vector<NodePtr> nodes;
     matrix_type delay_matrix;
     matrix_type dist_matrix;

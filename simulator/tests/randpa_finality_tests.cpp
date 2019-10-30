@@ -14,6 +14,20 @@ using namespace std;
 using std::string;
 
 
+TEST(randpa_finality, two_full_nodes) {
+    auto runner = TestRunner(2);
+    vector<node_type> nodetypes {node_type::FN, node_type::FN};
+    runner.load_nodetypes(nodetypes);
+    vector<pair<int, int> >  v0{{1, 10}};
+    graph_type g;
+    g.push_back(v0);
+    runner.load_graph(g);
+    runner.add_stop_task(2 * runner.get_slot_ms());
+    runner.run<RandpaNode>();
+    EXPECT_EQ(get_block_height(runner.get_db(0).last_irreversible_block_id()), 0);
+    EXPECT_EQ(get_block_height(runner.get_db(1).last_irreversible_block_id()), 0);
+}
+
 TEST(randpa_finality, three_nodes) {
     auto runner = TestRunner(3);
     vector<pair<int, int> > v0{{1, 2}, {2, 10}};
