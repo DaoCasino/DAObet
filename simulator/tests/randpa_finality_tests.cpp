@@ -28,6 +28,37 @@ TEST(randpa_finality, two_full_nodes) {
     EXPECT_EQ(get_block_height(runner.get_db(1).last_irreversible_block_id()), 0);
 }
 
+TEST(randpa_finality, fullnodes_over_fullnodes) {
+    auto runner = TestRunner(9);
+    vector<node_type> nodetypes {node_type::FN, node_type::FN, node_type::BP, node_type::BP, node_type::BP, node_type::FN, node_type::FN, node_type::FN, node_type::FN};
+    runner.load_nodetypes(nodetypes);
+    vector<pair<int, int> >  v0{{1, 10}};
+    vector<pair<int, int> >  v1{{2, 10}};
+    vector<pair<int, int> >  v2{{3, 20}, {4, 20}};
+    vector<pair<int, int> >  v3{{4, 20}, {5, 30}};
+    vector<pair<int, int> >  v4{{7, 10}};
+    vector<pair<int, int> >  v5{{6, 30}};
+    vector<pair<int, int> >  v7{{8, 10}};
+    graph_type g(9);
+    g[0] = v0;
+    g[1] = v1;
+    g[2] = v2;
+    g[3] = v3;
+    g[4] = v4;
+    g[5] = v5;
+    g[7] = v7;
+    runner.load_graph(g);
+    runner.add_stop_task(8 * runner.get_slot_ms());
+    runner.run<RandpaNode>();
+    EXPECT_EQ(get_block_height(runner.get_db(0).last_irreversible_block_id()), 7);
+    EXPECT_EQ(get_block_height(runner.get_db(1).last_irreversible_block_id()), 7);
+    EXPECT_EQ(get_block_height(runner.get_db(2).last_irreversible_block_id()), 7);
+    EXPECT_EQ(get_block_height(runner.get_db(3).last_irreversible_block_id()), 7);
+    EXPECT_EQ(get_block_height(runner.get_db(4).last_irreversible_block_id()), 7);
+    EXPECT_EQ(get_block_height(runner.get_db(5).last_irreversible_block_id()), 7);
+    EXPECT_EQ(get_block_height(runner.get_db(7).last_irreversible_block_id()), 7);
+}
+
 TEST(randpa_finality, three_nodes) {
     auto runner = TestRunner(3);
     vector<pair<int, int> > v0{{1, 2}, {2, 10}};
