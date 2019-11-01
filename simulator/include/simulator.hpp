@@ -218,6 +218,7 @@ public:
                 delay_matrix[i][j] = delay_matrix[j][i] = delay;
             }
         }
+        assert(delay_matrix.size() == nodetypes.size());
         count_dist_matrix();
     }
 
@@ -281,10 +282,17 @@ public:
     }
 
     vector<int> get_ordering() {
-        vector<int> permutation(get_instances());
-        iota(permutation.begin(), permutation.end(), 0);
+        vector<int> permutation(get_bp_list());
         random_shuffle(permutation.begin(), permutation.end(), [](size_t n) { return rand() % n; });
         return permutation;
+    }
+
+    vector<int> get_bp_list() {
+        vector<int> bp_list;
+        for(int i = 0; i<nodetypes.size(); ++i)
+            if(nodetypes[i] == node_type::BP)
+                bp_list.push_back(i);
+        return bp_list;
     }
 
     void add_schedule_task(uint32_t at) {
@@ -340,12 +348,10 @@ public:
         }
         std::cout << "]" << std::endl;
         auto now = clock.now();
-        auto instances = get_instances();
+        int instances = ordering.size();
 
         for (int i = 0; i < instances; i++) {
-            if(nodetypes.at(i) != node_type::FN) {
-                schedule_producer(now + i * get_slot_ms(), ordering[i]);
-            }
+            schedule_producer(now + i * get_slot_ms(), ordering[i]);
         }
 
         schedule_time = now + instances * get_slot_ms();
@@ -410,7 +416,8 @@ public:
     void run() {
         init_nodes<TNode>(get_instances());
         init_connections();
-        add_schedule_task(schedule_time);
+        if (get_bp_list().size() != 0)
+            add_schedule_task(schedule_time);
         run_loop();
     }
 
