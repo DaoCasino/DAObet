@@ -2386,18 +2386,26 @@ namespace eosio {
 
          if( peer_lib <= lib_num && peer_lib > 0) {
             try {
-               block_id_type peer_lib_id =  cc.get_block_id_for_num( peer_lib);
-               on_fork =( msg.last_irreversible_block_id != peer_lib_id);
-            }
-            catch( const unknown_block_exception &ex) {
-               fc_wlog( logger, "peer last irreversible block ${pl} is unknown", ("pl", peer_lib) );
-               on_fork = true;
+               auto peer_lib_blk = cc.fetch_block_by_number(peer_lib);
+               if (peer_lib_blk) {
+                  on_fork = (msg.last_irreversible_block_id != peer_lib_blk->id());
+               }
+               else {
+                  auto peer_lib_next_blk = cc.fetch_block_by_number(peer_lib + 1);
+                  if (peer_lib_next_blk) {
+                     on_fork = (msg.last_irreversible_block_id != peer_lib_next_blk->previous);
+                  }
+                  else {
+                     on_fork = true;
+                  }
+               }
             }
             catch( ...) {
                fc_wlog( logger, "caught an exception getting block id for ${pl}",("pl",peer_lib) );
                on_fork = true;
             }
             if( on_fork) {
+               fc_wlog( logger, "peer last irreversible block ${pl} is unknown", ("pl", peer_lib) );
                fc_elog( logger, "Peer chain is forked" );
                c->enqueue( go_away_message( forked ));
                return;
