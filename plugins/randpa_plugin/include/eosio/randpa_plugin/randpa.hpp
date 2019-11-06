@@ -322,6 +322,36 @@ private:
     }
 #endif
 
+     bool check_is_valid_msg(const randpa_net_msg_data& data) {
+        try {
+            switch (data.which()) {
+                case randpa_net_msg_data::tag<prevote_msg>::value:
+                    data.get<prevote_msg>().public_key();
+                    break;
+                case randpa_net_msg_data::tag<precommit_msg>::value:
+                    data.get<precommit_msg>().public_key();
+                    break;
+                case randpa_net_msg_data::tag<proof_msg>::value:
+                    data.get<proof_msg>().public_key();
+                    break;
+                case randpa_net_msg_data::tag<handshake_msg>::value:
+                    data.get<handshake_msg>().public_key();
+                    break;
+                case randpa_net_msg_data::tag<handshake_ans_msg>::value:
+                    data.get<handshake_ans_msg>().public_key();
+                    break;
+                case randpa_net_msg_data::tag<finality_notice_msg>::value:
+                    data.get<finality_notice_msg>().public_key();
+                    break;
+                case randpa_net_msg_data::tag<finality_req_proof_msg>::value:
+                    data.get<finality_req_proof_msg>().public_key();
+                    break;
+            }
+        } catch (const fc::exception&) {
+            return false;
+        }
+        return true;
+    }
     // need handle all messages
     void process_msg(randpa_message_ptr msg_ptr) {
         auto msg = *msg_ptr;
@@ -346,6 +376,10 @@ private:
 
         auto ses_id = msg.ses_id;
         const auto& data = msg.data;
+        if (check_is_valid_msg(data)) {
+            wlog("Got invalid msg signature, receive_time: ${receive_time}", ("receive_time", msg.receive_time));
+            return;
+        }
 
         switch (data.which()) {
             case randpa_net_msg_data::tag<prevote_msg>::value:
