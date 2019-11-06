@@ -121,6 +121,43 @@ TEST(randpa_finality, fullnodes_over_five_fullnodes) {
     EXPECT_EQ(get_block_height(runner.get_db(16).last_irreversible_block_id()), 13);
 }
 
+TEST(randpa_finality, fullnodes_over_round_ring) {
+    size_t nodes_amount = 64;
+    auto runner = TestRunner(nodes_amount);
+    vector<node_type> nodetypes(nodes_amount, node_type::FN);
+    nodetypes[3] = node_type::BP;
+    for (auto i = 4; i<nodes_amount; i += 3)
+        nodetypes[i] = node_type::BP;
+    runner.load_nodetypes(nodetypes);
+
+    auto max_delay = 40;
+    auto min_delay = 10;
+    auto random = [&](){ return (rand() % (max_delay - min_delay)) + min_delay; };
+
+    graph_type g;
+    vector<pair<int, int> > empty_vector;
+    g.push_back({{1, 10}});
+    g.push_back({{2, 20}});
+    g.push_back({{3, 10}});
+    g.push_back({{4, 30}});
+    for (auto i = 4; i < nodes_amount-3; i += 3) { // 4->5,4->7; 5->6 // ... // 61->4,61->62; 62->63
+        g.push_back({{ i+1, random() }, { i+3, random() }});
+        g.push_back({{ i+2, random() }});
+        g.push_back(empty_vector);
+    }
+    g.push_back({{62, 30}});
+    g.push_back({{63, 30}});
+    g.push_back(empty_vector);
+
+    runner.load_graph(g);
+    runner.add_stop_task(24 * runner.get_slot_ms());
+    runner.run<RandpaNode>();
+    for (auto i = 0; i<nodes_amount; ++i) {
+        if (g[i] != empty_vector) {
+            EXPECT_EQ(get_block_height(runner.get_db(i).last_irreversible_block_id()), 19);
+        }
+    }
+}
 
 TEST(randpa_finality, three_nodes) {
     auto runner = TestRunner(3);
