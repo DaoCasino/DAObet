@@ -20,7 +20,7 @@ class Utils:
     FNull = open(os.devnull, 'w')
 
     EosClientPath="programs/daobet-cli/daobet-cli"
-    MiscEosClientArgs="--no-auto-keosd"
+    MiscEosClientArgs="--no-auto-daobet-wallet"
 
     EosWalletName="daobet-wallet"
     EosWalletPath="programs/daobet-wallet/"+ EosWalletName
