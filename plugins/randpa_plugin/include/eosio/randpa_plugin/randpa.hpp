@@ -322,6 +322,16 @@ private:
     }
 #endif
 
+    template <typename T>
+    bool check_is_valid_msg(const T& msg) const {
+        try {
+            msg.public_key();
+        } catch (const fc::exception&) {
+            return false;
+        }
+        return true;
+    }
+
     // need handle all messages
     void process_msg(randpa_message_ptr msg_ptr) {
         auto msg = *msg_ptr;
@@ -338,43 +348,33 @@ private:
         }
     }
 
+    class net_msg_handler: public fc::visitor<void> {
+    public:
+        net_msg_handler(randpa& randpa_ref, uint32_t ses_id):
+            _randpa(randpa_ref),
+            _ses_id(ses_id)
+        { }
+
+        template <typename T>
+        void operator() (const T& msg) {
+            if (_randpa.check_is_valid_msg(msg)) {
+                _randpa.on(_ses_id, msg);
+            }
+        }
+
+    private:
+        randpa& _randpa;
+        uint32_t _ses_id;
+    };
+
     void process_net_msg(const randpa_net_msg& msg) {
         if (fc::time_point::now() - msg.receive_time > fc::milliseconds(msg_expiration_ms)) {
             wlog("Network message dropped, msg age: ${age}", ("age", fc::time_point::now() - msg.receive_time));
             return;
         }
 
-        auto ses_id = msg.ses_id;
-        const auto& data = msg.data;
-
-        switch (data.which()) {
-            case randpa_net_msg_data::tag<prevote_msg>::value:
-                process_round_msg(ses_id, data.get<prevote_msg>());
-                break;
-            case randpa_net_msg_data::tag<precommit_msg>::value:
-                process_round_msg(ses_id, data.get<precommit_msg>());
-                break;
-            case randpa_net_msg_data::tag<proof_msg>::value:
-                on(ses_id, data.get<proof_msg>());
-                break;
-            case randpa_net_msg_data::tag<handshake_msg>::value:
-                on(ses_id, data.get<handshake_msg>());
-                break;
-            case randpa_net_msg_data::tag<handshake_ans_msg>::value:
-                on(ses_id, data.get<handshake_ans_msg>());
-                break;
-            case randpa_net_msg_data::tag<finality_notice_msg>::value:
-                on(ses_id, data.get<finality_notice_msg>());
-                break;
-            case randpa_net_msg_data::tag<finality_req_proof_msg>::value:
-                on(ses_id, data.get<finality_req_proof_msg>());
-                break;
-            default:
-                wlog("Randpa message received, but handler not found, type: ${type}",
-                    ("type", data.which())
-                );
-                break;
-        }
+        auto visitor = net_msg_handler(*this, msg.ses_id);
+        msg.data.visit(visitor);
     }
 
     void process_event(const randpa_event& event){
@@ -465,6 +465,14 @@ private:
             precommited_keys.insert(precommiter_pub_key);
         }
         return precommited_keys.size() > node->active_bp_keys.size() * 2 / 3;
+    }
+
+    void on(uint32_t ses_id, const prevote_msg& msg) {
+        process_round_msg(ses_id, msg);
+    }
+
+    void on(uint32_t ses_id, const precommit_msg& msg) {
+        process_round_msg(ses_id, msg);
     }
 
     void on(uint32_t ses_id, const finality_notice_msg& msg) {
