@@ -322,31 +322,10 @@ private:
     }
 #endif
 
-     bool check_is_valid_msg(const randpa_net_msg_data& data) {
+    template <typename T>
+    bool check_is_valid_msg(const T& msg) {
         try {
-            switch (data.which()) {
-                case randpa_net_msg_data::tag<prevote_msg>::value:
-                    data.get<prevote_msg>().public_key();
-                    break;
-                case randpa_net_msg_data::tag<precommit_msg>::value:
-                    data.get<precommit_msg>().public_key();
-                    break;
-                case randpa_net_msg_data::tag<proof_msg>::value:
-                    data.get<proof_msg>().public_key();
-                    break;
-                case randpa_net_msg_data::tag<handshake_msg>::value:
-                    data.get<handshake_msg>().public_key();
-                    break;
-                case randpa_net_msg_data::tag<handshake_ans_msg>::value:
-                    data.get<handshake_ans_msg>().public_key();
-                    break;
-                case randpa_net_msg_data::tag<finality_notice_msg>::value:
-                    data.get<finality_notice_msg>().public_key();
-                    break;
-                case randpa_net_msg_data::tag<finality_req_proof_msg>::value:
-                    data.get<finality_req_proof_msg>().public_key();
-                    break;
-            }
+            msg.public_key();
         } catch (const fc::exception&) {
             return false;
         }
@@ -368,47 +347,33 @@ private:
         }
     }
 
+    class net_msg_handler: public fc::visitor<void> {
+    public:
+        net_msg_handler(randpa &randpa, uint32_t ses_id):
+            randpa(randpa),
+            ses_id(ses_id)
+        { }
+
+        template <typename T>
+        void operator() (const T& msg) {
+            if (randpa.check_is_valid_msg(msg)) {
+                randpa.on(ses_id, msg);
+            }
+        }
+
+    private:
+        randpa &randpa;
+        uint32_t ses_id;
+    };
+
     void process_net_msg(const randpa_net_msg& msg) {
         if (fc::time_point::now() - msg.receive_time > fc::milliseconds(msg_expiration_ms)) {
             wlog("Network message dropped, msg age: ${age}", ("age", fc::time_point::now() - msg.receive_time));
             return;
         }
 
-        auto ses_id = msg.ses_id;
-        const auto& data = msg.data;
-        if (check_is_valid_msg(data)) {
-            wlog("Got invalid msg signature, receive_time: ${receive_time}", ("receive_time", msg.receive_time));
-            return;
-        }
-
-        switch (data.which()) {
-            case randpa_net_msg_data::tag<prevote_msg>::value:
-                process_round_msg(ses_id, data.get<prevote_msg>());
-                break;
-            case randpa_net_msg_data::tag<precommit_msg>::value:
-                process_round_msg(ses_id, data.get<precommit_msg>());
-                break;
-            case randpa_net_msg_data::tag<proof_msg>::value:
-                on(ses_id, data.get<proof_msg>());
-                break;
-            case randpa_net_msg_data::tag<handshake_msg>::value:
-                on(ses_id, data.get<handshake_msg>());
-                break;
-            case randpa_net_msg_data::tag<handshake_ans_msg>::value:
-                on(ses_id, data.get<handshake_ans_msg>());
-                break;
-            case randpa_net_msg_data::tag<finality_notice_msg>::value:
-                on(ses_id, data.get<finality_notice_msg>());
-                break;
-            case randpa_net_msg_data::tag<finality_req_proof_msg>::value:
-                on(ses_id, data.get<finality_req_proof_msg>());
-                break;
-            default:
-                wlog("Randpa message received, but handler not found, type: ${type}",
-                    ("type", data.which())
-                );
-                break;
-        }
+        auto visitor = net_msg_handler(*this, msg.ses_id);
+        msg.data.visit(visitor);
     }
 
     void process_event(const randpa_event& event){
@@ -651,6 +616,14 @@ private:
         _last_prooved_block_num = get_block_num(proof.best_block);
         _finality_channel->send(proof.best_block);
         bcast(finality_notice_msg{{proof.round_num, proof.best_block}, _signature_provider});
+    }
+
+    void on(uint32_t ses_id, const prevote_msg& msg) {
+        process_round_msg(ses_id, msg);
+    }
+
+    void on(uint32_t ses_id, const precommit_msg& msg) {
+        process_round_msg(ses_id, msg);
     }
 
     template <typename T>
