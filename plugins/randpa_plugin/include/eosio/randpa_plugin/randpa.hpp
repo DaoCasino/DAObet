@@ -702,6 +702,7 @@ private:
 
         if (get_block_num(_lib) < get_block_num(proof.best_block)) {
             on_proof_gained(proof);
+            update_lib(proof.best_block);
         }
         dlog("round ${r} finished", ("r", _round->get_num()));
     }
