@@ -172,14 +172,13 @@ if [ "${BOOSTVERSION}" != "${BOOST_VERSION_MAJOR}0${BOOST_VERSION_MINOR}0${BOOST
 	printf "Installing Boost library...\\n"
 	curl -LO https://dl.bintray.com/boostorg/release/$BOOST_VERSION_MAJOR.$BOOST_VERSION_MINOR.$BOOST_VERSION_PATCH/source/boost_$BOOST_VERSION.tar.bz2 \
 	&& tar -xjf boost_$BOOST_VERSION.tar.bz2 \
-	&& cd $BOOST_ROOT \
+	&& cd $BOOST_SRC \
 	&& ./bootstrap.sh --prefix=$BOOST_ROOT \
 	&& ./b2 -q -j"${JOBS}" --with-iostreams --with-date_time --with-filesystem \
 	                                                  --with-system --with-program_options --with-chrono --with-test install \
 	&& cd .. \
 	&& rm -f boost_$BOOST_VERSION.tar.bz2 \
-	&& rm -rf $BOOST_LINK_LOCATION \
-	&& ln -s $BOOST_ROOT $BOOST_LINK_LOCATION \
+	&& rm -rf $BOOST_SRC \
 	|| exit 1
 	printf " - Boost library successfully installed @ ${BOOST_ROOT}.\\n"
 else
