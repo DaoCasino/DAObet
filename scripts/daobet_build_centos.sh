@@ -213,7 +213,7 @@ if [ -z $SKIP_DEPS_CHECK ]; then
 
     export CPATH="$CPATH:/opt/rh/python33/root/usr/include/python3.3m" # m on the end causes problems with boost finding python3
     printf "Checking Boost library (${BOOST_VERSION}) installation...\\n"
-    BOOSTVERSION=$( grep "#define BOOST_VERSION" "$HOME/opt/boost/include/boost/version.hpp" 2>/dev/null | tail -1 | tr -s ' ' | cut -d\  -f3 )
+    BOOSTVERSION=$( grep "#define BOOST_VERSION" "$BOOST_ROOT/include/boost/version.hpp" 2>/dev/null | tail -1 | tr -s ' ' | cut -d\  -f3 )
     if [ "${BOOSTVERSION}" != "${BOOST_VERSION_MAJOR}0${BOOST_VERSION_MINOR}0${BOOST_VERSION_PATCH}" ]; then
         printf "Installing Boost library...\\n"
         curl -LO https://dl.bintray.com/boostorg/release/${BOOST_VERSION_MAJOR}.${BOOST_VERSION_MINOR}.${BOOST_VERSION_PATCH}/source/boost_$BOOST_VERSION.tar.bz2 \
