@@ -257,6 +257,7 @@ private:
     /// Proof data is invalidated after each round is finished, but other nodes will want to request
     /// proofs for that round; this cache holds some proofs to reply such requests.
     boost::circular_buffer<proof_type> _last_proofs;
+    bool is_syncing { false };
 
 #ifndef SYNC_RANDPA
     message_queue<randpa_message> _message_queue;
@@ -577,6 +578,8 @@ private:
             return;
         }
 
+        is_syncing = event.sync;
+
         if (event.sync) {
             ilog("Randpa omit block while syncing, id: ${id}", ("id", event.block_id));
             return;
@@ -629,6 +632,10 @@ private:
 
     template <typename T>
     void process_round_msg(uint32_t ses_id, const T& msg) {
+        if (is_syncing) {
+            return;
+        }
+
         auto last_round_num = round_num(_prefix_tree->get_head()->block_id);
 
         if (last_round_num == msg.data.round_num) {
