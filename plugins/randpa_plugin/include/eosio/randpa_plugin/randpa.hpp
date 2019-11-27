@@ -6,6 +6,8 @@
 #include <fc/io/json.hpp>
 
 #include <boost/circular_buffer.hpp>
+#include <boost/compute/detail/lru_cache.hpp>
+#include <boost/blank.hpp>
 
 #include <queue>
 #include <chrono>
@@ -157,6 +159,7 @@ using event_channel_ptr = std::shared_ptr<event_channel>;
 
 using finality_channel = channel<const block_id_type&>;
 using finality_channel_ptr = std::shared_ptr<finality_channel>;
+using lru_cache_type = boost::compute::detail::lru_cache<digest_type, boost::blank>;
 
 class randpa {
 public:
@@ -166,8 +169,9 @@ public:
 
 public:
     randpa()
-        : _last_proofs{_proofs_cache_size}
-    {
+        : _peer_messages{_messages_cache_size},
+          _self_messages{_messages_cache_size},
+          _last_proofs{_proofs_cache_size} {
         auto private_key = private_key_type::generate();
         _signature_provider = [private_key](const digest_type& digest) {
             return private_key.sign(digest);
@@ -242,6 +246,7 @@ public:
 
 private:
     static constexpr size_t _proofs_cache_size = 2; ///< how much last proofs to keep; @see _last_proofs
+    static constexpr size_t _messages_cache_size = 100 * 100 * 100;
 
     std::unique_ptr<std::thread> _thread_ptr;
     std::atomic<bool> _done { false };
@@ -252,7 +257,8 @@ private:
     block_id_type _lib;                              // last irreversible block
     uint32_t _last_prooved_block_num { 0 };
     std::map<public_key_type, uint32_t> _peers;
-    std::map<public_key_type, std::set<digest_type>> _known_messages;
+    lru_cache_type _peer_messages;
+    lru_cache_type _self_messages;
     bool _provided_bp_key { false };
     /// Proof data is invalidated after each round is finished, but other nodes will want to request
     /// proofs for that round; this cache holds some proofs to reply such requests.
@@ -301,12 +307,13 @@ private:
     template <typename T>
     void bcast(const T & msg) {
         auto msg_hash = digest_type::hash(msg);
-        for (const auto& peer: _peers) {
-            if (!_known_messages[peer.first].count(msg_hash)) {
-                send(peer.second, msg);
-                _known_messages[peer.first].insert(msg_hash);
-            }
+        if (_peer_messages.contains(msg_hash)) {
+            return;
         }
+        for (const auto& peer: _peers) {
+            send(peer.second, msg);
+        }
+        _peer_messages.insert(msg_hash, {});
     }
 
 #ifndef SYNC_RANDPA
@@ -636,16 +643,18 @@ private:
             return;
         }
 
+        auto msg_hash = digest_type::hash(msg);
+
+        if (_self_messages.contains(msg_hash)) {
+            return;
+        }
+
+        _self_messages.insert(msg_hash, {});
+
         auto last_round_num = round_num(_prefix_tree->get_head()->block_id);
 
         if (last_round_num == msg.data.round_num) {
             bcast(msg);
-        }
-
-        auto msg_hash = digest_type::hash(msg);
-
-        if (_known_messages[_public_key].count(msg_hash)) {
-            return;
         }
 
         if (!_round) {
@@ -654,7 +663,6 @@ private:
         }
 
         _round->on(msg);
-        _known_messages[_public_key].insert(msg_hash);
     }
 
     uint32_t round_num(const block_id_type& block_id) const {
@@ -736,7 +744,8 @@ private:
     }
 
     void remove_round() {
-        _known_messages.clear();
+        _peer_messages.clear();
+        _self_messages.clear();
         _prefix_tree->remove_confirmations();
         _round.reset();
     }
