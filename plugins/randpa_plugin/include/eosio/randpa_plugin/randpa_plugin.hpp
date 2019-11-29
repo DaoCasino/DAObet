@@ -17,7 +17,7 @@ public:
     void plugin_initialize(const variables_map& options);
     void plugin_startup();
     void plugin_shutdown();
-
+    void handle_sighup() override;
 private:
     std::unique_ptr<class randpa_plugin_impl> my;
 };

@@ -135,7 +135,7 @@ public:
                         .update_counter("randpa_net_out_finality_req_proof_cnt");
                     break;
                 default:
-                    wlog("randpa message sent, but handler not found, type: ${type}",
+                    randpa_wlog("randpa message sent, but handler not found, type: ${type}",
                         ("type", data.which())
                     );
                     break;
@@ -185,9 +185,9 @@ public:
     prefix_tree_ptr copy_fork_db() {
         const auto& ctrl = app().get_plugin<chain_plugin>().chain();
         auto lib_id = ctrl.last_irreversible_block_id();
-        dlog("Initializing prefix_chain_tree with ${lib_id}", ("lib_id", lib_id));
+        randpa_dlog("Initializing prefix_chain_tree with ${lib_id}", ("lib_id", lib_id));
         prefix_tree_ptr tree(new prefix_tree(std::make_shared<tree_node>(tree_node { lib_id })));
-        dlog("Copying master chain from fork_db");
+        randpa_dlog("Copying master chain from fork_db");
 
         auto current_block = ctrl.head_block_state();
 
@@ -206,7 +206,7 @@ public:
                          get_bp_keys(block_ptr));
             base_block = block_id;
         }
-        dlog("Successfully copied ${amount} blocks", ("amount", blocks.size()));
+        randpa_dlog("Successfully copied ${amount} blocks", ("amount", blocks.size()));
         return tree;
     }
 
@@ -323,16 +323,21 @@ void randpa_plugin::plugin_initialize(const variables_map& options) {
         }
 
     } catch (...) {
-        elog("Malformed signature provider: \"${val}\", ignoring!", ("val", key_spec_pair));
+        randpa_elog("Malformed signature provider: \"${val}\", ignoring!", ("val", key_spec_pair));
     }
 }
 
 void randpa_plugin::plugin_startup() {
+    handle_sighup();
     my->start();
 }
 
 void randpa_plugin::plugin_shutdown() {
     my->stop();
+}
+
+void randpa_plugin::handle_sighup() {
+    fc::logger::update(randpa_logger_name, randpa_logger);
 }
 
 } // namespace eosio
