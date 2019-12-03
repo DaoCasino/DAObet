@@ -25,7 +25,7 @@ using block_id_type = fc::sha256;
 using digest_type = fc::sha256;
 using signature_provider_type = std::function<signature_type(digest_type)>;
 
-uint32_t get_block_num(const block_id_type& id) {
+int32_t get_block_num(const block_id_type& id) {
     return fc::endian_reverse_u32(id._hash[0]);
 }
 
