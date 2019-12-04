@@ -95,6 +95,15 @@ public:
                                                                 } });
     }
 
+    void on_irreversible_block_event(const block_id_type& block) override {
+        logger << "[Node] #" << this->id << " on_irreversible_event " << std::endl;
+        ev_ch->send(randpa_event { ::on_irreversible_event { block } });
+    }
+
+    randpa& get_randpa() const {
+        return *randpa_impl;
+    }
+
 private:
     void init_channels() {
         in_net_ch = std::make_shared<net_channel>();

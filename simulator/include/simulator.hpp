@@ -152,8 +152,9 @@ public:
             return false;
         }
 
+        bool new_lib = false;
         try {
-            db.insert(chain);
+            new_lib = db.insert(chain);
         } catch (const ForkDbInsertException&) {
             logger << node_id << "Failed to apply chain" << std::endl;
             pending_chains.push(chain);
@@ -162,6 +163,9 @@ public:
 
         for (auto& block : chain.blocks) {
             on_accepted_block_event(block);
+        }
+        if (new_lib) {
+            on_irreversible_block_event(db.last_irreversible_block_id());
         }
         return true;
     }
@@ -179,6 +183,10 @@ public:
 
     virtual void on_accepted_block_event(pair<block_id_type, public_key_type> block) {
         logger << "On accepted block event handled by " << this->id << " at " << get_clock().now() << std::endl;
+    }
+
+    virtual void on_irreversible_block_event(const block_id_type& block) {
+        logger << "On irreversible block event handled by " << this->id << " at " << get_clock().now() << std::endl;
     }
 
     virtual void restart() {}
@@ -272,7 +280,7 @@ public:
         ss << "[Node] #" << node->id << " ";
         auto node_id = ss.str();
         logger << node_id << "Generating block" << " at " << clock.now() << std::endl;
-        logger << node_id << "LIB " << db.last_irreversible_block_id() << std::endl;
+        logger << node_id << "LIB height: " << get_block_height(db.last_irreversible_block_id()) << std::endl;
         auto head = db.get_master_head();
         auto head_block_height = fc::endian_reverse_u32(head->block_id._hash[0]);
         logger << node_id << "Head block height: " << head_block_height << std::endl;
@@ -334,8 +342,11 @@ public:
             task.cb = [this](NodePtr node) {
                 auto block = create_block(node);
                 relay_block(node, block);
-                node->db.insert(block);
+                bool new_lib = node->db.insert(block);
                 node->on_accepted_block_event(block.blocks[0]);
+                if (new_lib) {
+                    node->on_irreversible_block_event(node->db.last_irreversible_block_id());
+                }
             };
             task.type = Task::CREATE_BLOCK;
             add_task(std::move(task));
@@ -418,6 +429,13 @@ public:
     template <typename TNode = Node>
     void run() {
         init_nodes<TNode>(get_instances());
+        init_connections();
+        assert(get_bp_list().size() != 0);
+        add_schedule_task(schedule_time);
+        run_loop();
+    }
+
+    void run_with_initialized_nodes() {
         init_connections();
         assert(get_bp_list().size() != 0);
         add_schedule_task(schedule_time);
@@ -507,6 +525,21 @@ public:
     size_t blocks_per_slot;
     bool should_stop = false;
 
+    template<typename TNode>
+    void add_node(int conf_number=0) {
+        conf_number = !conf_number ? 2 * blocks_per_slot * bft_threshold() : conf_number;
+        auto node = get_initialized_node<TNode>(active_bp_keys.size(), conf_number);
+        nodes.push_back(node);
+        active_bp_keys.insert(node->private_key.get_public_key());
+    }
+
+    template<typename TNode>
+    NodePtr get_initialized_node(int id, int conf_number) {
+        auto priv_key = get_priv_key();
+        auto node = std::make_shared<TNode>(id, Network(id, this), fork_db(genesys_block,
+                conf_number), priv_key);
+        return node;
+    }
 
 private:
     block_id_type generate_block(uint32_t block_height) {
@@ -521,11 +554,9 @@ private:
         for (auto i = 0; i < count; ++i) {
             // See https://bit.ly/2Wp3Nsf
             auto conf_number = 2 * blocks_per_slot * bft_threshold();
-            auto priv_key = get_priv_key();
-            auto node = std::make_shared<TNode>(i, Network(i, this), fork_db(genesys_block,
-                    conf_number), priv_key);
-            nodes.push_back(std::static_pointer_cast<Node>(node));
-            active_bp_keys.insert(priv_key.get_public_key());
+            auto node = get_initialized_node<TNode>(i, conf_number);
+            nodes.push_back(node);
+            active_bp_keys.insert(node->private_key.get_public_key());
         }
     }
 

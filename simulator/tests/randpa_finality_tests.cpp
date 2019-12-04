@@ -8,6 +8,7 @@
 #include <ctime>
 #include <random>
 #include <randpa.hpp>
+#include <tuple>
 
 using namespace std;
 
@@ -461,5 +462,59 @@ TEST(randpa_finality, no_threshold) {
 
     for (auto i = 0; i < nodes_cnt; i++) {
         EXPECT_EQ(get_block_height(runner.get_db(i).last_irreversible_block_id()), 0);
+    }
+}
+
+
+TEST(randpa_finality, randpa_disabled_nodes) {
+    int nodes_amount = 3;
+    auto dpos_threshold = 2 * (nodes_amount * 2 / 3 + 1);
+    auto runner = TestRunner(nodes_amount);
+
+    // model network failure with unrealistically large number of confirmations
+    auto big_conf_number = 100'000;
+
+    for (int i = 0; i < nodes_amount; i++) {
+        if (i & 1) {
+            runner.add_node<RandpaNode>(big_conf_number);
+        } else {
+            runner.add_node<Node>(big_conf_number);
+        }
+    }
+    
+    vector<pair<int, int> > v0{{1, 2}, {2, 10}};
+    graph_type g;
+    g.push_back(v0);
+    runner.load_graph(g);
+    
+    // dpos finality fails and randpa frozen
+    runner.add_stop_task(4000 * runner.get_slot_ms());
+    runner.run_with_initialized_nodes();
+
+    auto check_randpa_state = [&](bool frozen) {
+        for (auto i = 0; i < nodes_amount; i++) {
+            const auto node_ptr = dynamic_pointer_cast<RandpaNode>(runner.get_node(i));
+            if (node_ptr) {
+                EXPECT_EQ(frozen, node_ptr->get_randpa().is_frozen());
+            }
+        }    
+    };
+
+    check_randpa_state(true);
+    
+    // change conf_number to dpos_threshold 
+    for (int i = 0; i < nodes_amount; i++) {
+        const auto node_ptr = runner.get_node(i);
+        node_ptr->db.set_conf_number(dpos_threshold);
+    }
+
+    runner.add_stop_task(6000 * runner.get_slot_ms());
+    runner.run_loop();
+    // dpos finality should be back and randpa active
+    check_randpa_state(false);
+
+    // head block num: 6000
+    for (int i = 0; i < nodes_amount; i++) {
+        EXPECT_EQ(5994, get_block_height(runner.get_db(i).last_irreversible_block_id()));
     }
 }

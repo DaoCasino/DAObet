@@ -296,7 +296,7 @@ private:
     /// Proof data is invalidated after each round is finished, but other nodes will want to request
     /// proofs for that round; this cache holds some proofs to reply such requests.
     boost::circular_buffer<proof_type> _last_proofs;
-    bool is_syncing { false }; // syncing blocks from peers
+    bool _is_syncing { false }; // syncing blocks from peers
     bool _is_frozen { false }; // freeze if dpos finality stops working
 
 #ifndef SYNC_RANDPA
@@ -619,7 +619,7 @@ private:
             return;
         }
 
-        is_syncing = event.sync;
+        _is_syncing = event.sync;
         // if (_lib != block_id_type())
         _is_frozen = get_block_num(event.block_id) - get_block_num(_lib) > _max_finality_lag_blocks;
         // std::cout << "Randpa on_accepted_block called" << std::endl;
@@ -678,7 +678,7 @@ private:
 
     template <typename T>
     void process_round_msg(uint32_t ses_id, const T& msg) {
-        if (is_syncing || _is_frozen) {
+        if (_is_syncing || _is_frozen) {
             std::cout << "SYNCING OR FROZEN STATE" << std::endl;
             return;
         }
@@ -802,10 +802,6 @@ private:
         }
 
         _lib = lib_id;
-    }
-
-    std::tuple<bool, bool> get_state() const {
-        return {is_syncing, _is_frozen};
     }
 };
 
