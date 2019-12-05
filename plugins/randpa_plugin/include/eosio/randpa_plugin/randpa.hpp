@@ -281,7 +281,9 @@ public:
 private:
     static constexpr size_t _proofs_cache_size = 2; ///< how much last proofs to keep; @see _last_proofs
     static constexpr size_t _messages_cache_size = 100 * 100 * 100; // network msg cache size
-    static constexpr int32_t _max_finality_lag_blocks = 68 * 12 * 2 * 2; // 
+    // See https://bit.ly/2Wp3Nsf
+    // 2 / 3 * 102 * 12 (blocks per slot) * 2 rounds * 2 (additional)
+    static constexpr int32_t _max_finality_lag_blocks = 69 * 12 * 2 * 2;
 
     std::unique_ptr<std::thread> _thread_ptr;
     std::atomic<bool> _done { false };

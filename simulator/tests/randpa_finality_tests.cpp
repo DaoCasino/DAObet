@@ -487,10 +487,11 @@ TEST(randpa_finality, randpa_disabled_nodes) {
     runner.load_graph(g);
     
     // dpos finality fails and randpa frozen
-    runner.add_stop_task(4000 * runner.get_slot_ms());
+    const int32_t _max_finality_lag_blocks = 69 * 12 * 2 * 2;
+    runner.add_stop_task((_max_finality_lag_blocks + 1) * runner.get_slot_ms());
     runner.run_with_initialized_nodes();
 
-    auto check_randpa_state = [&](bool frozen) {
+    auto check_randpa_frozen = [&](bool frozen) {
         for (auto i = 0; i < nodes_amount; i++) {
             const auto node_ptr = dynamic_pointer_cast<RandpaNode>(runner.get_node(i));
             if (node_ptr) {
@@ -499,21 +500,21 @@ TEST(randpa_finality, randpa_disabled_nodes) {
         }    
     };
 
-    check_randpa_state(true);
+    check_randpa_frozen(true);
     
     // change conf_number to dpos_threshold 
     for (int i = 0; i < nodes_amount; i++) {
         const auto node_ptr = runner.get_node(i);
         node_ptr->db.set_conf_number(dpos_threshold);
     }
-
-    runner.add_stop_task(6000 * runner.get_slot_ms());
+    
+    runner.add_stop_task(4000 * runner.get_slot_ms());
     runner.run_loop();
     // dpos finality should be back and randpa active
-    check_randpa_state(false);
+    check_randpa_frozen(false);
 
-    // head block num: 6000
+    // head block num: 4000
     for (int i = 0; i < nodes_amount; i++) {
-        EXPECT_EQ(5994, get_block_height(runner.get_db(i).last_irreversible_block_id()));
+        EXPECT_EQ(3994, get_block_height(runner.get_db(i).last_irreversible_block_id()));
     }
 }
