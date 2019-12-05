@@ -13,8 +13,6 @@ using std::weak_ptr;
 using std::pair;
 using std::make_pair;
 
-#include "log.hpp"
-
 struct fork_db_node;
 using fork_db_node_ptr = shared_ptr<fork_db_node>;
 

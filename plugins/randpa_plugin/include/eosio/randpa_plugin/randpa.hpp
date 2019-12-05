@@ -15,8 +15,6 @@
 #include <mutex>
 #include <thread>
 #include <condition_variable>
-#include <tuple>
-#include <iostream>
 
 namespace randpa_finality {
 
@@ -270,6 +268,10 @@ public:
 
     prefix_tree_ptr get_prefix_tree() const {
         return _prefix_tree;
+    }
+
+    bool is_syncing() const {
+        return _is_syncing;
     }
 
     bool is_frozen() const {
@@ -620,11 +622,7 @@ private:
         }
 
         _is_syncing = event.sync;
-        // if (_lib != block_id_type())
         _is_frozen = get_block_num(event.block_id) - get_block_num(_lib) > _max_finality_lag_blocks;
-        // std::cout << "Randpa on_accepted_block called" << std::endl;
-        // std::cout << "LIB: " << get_block_num(_lib) << std::endl;
-        // std::cout << "Event block id: " << get_block_num(event.block_id) << std::endl;
 
         if (event.sync) {
             randpa_ilog("Randpa omit block while syncing, id: ${id}", ("id", event.block_id));
@@ -679,7 +677,7 @@ private:
     template <typename T>
     void process_round_msg(uint32_t ses_id, const T& msg) {
         if (_is_syncing || _is_frozen) {
-            std::cout << "SYNCING OR FROZEN STATE" << std::endl;
+            randpa_dlog("Randpa syncing or frozen");
             return;
         }
 
