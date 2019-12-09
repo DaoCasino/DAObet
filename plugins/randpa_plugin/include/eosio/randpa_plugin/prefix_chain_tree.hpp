@@ -71,12 +71,21 @@ private:
     };
 
 public:
-    explicit prefix_chain_tree(node_ptr&& root_): root(std::move(root_)) {}
+    explicit prefix_chain_tree(node_ptr&& root_) {
+        // some dummy code for root to actually be erased from block_index
+        NodeType *raw_ptr = new NodeType(*root_);
+        root = shared_ptr<NodeType>(raw_ptr, [this](NodeType *ptr) {
+            this->block_index.erase(ptr->block_id);
+            delete ptr;
+        });
+        block_index[root->block_id] = node_weak_ptr(root);
+    }
     prefix_chain_tree() = delete;
     prefix_chain_tree(const prefix_chain_tree&) = delete;
 
     auto find(const block_id_type& block_id) const {
-        return find_node(block_id, root);
+        auto itr = block_index.find(block_id);
+        return itr != block_index.end() ? itr->second.lock() : nullptr;
     }
 
     node_ptr add_confirmations(const chain_type& chain, const public_key_type& sender_key, const conf_ptr& conf) {
@@ -150,8 +159,10 @@ public:
     }
 
 private:
-    node_ptr root;
     map<public_key_type, node_weak_ptr> last_inserted_block;
+    map<block_id_type, node_weak_ptr> block_index;
+    // lifetime(node) < lifetime(block_index) => destroy the node first
+    node_ptr root;
     node_weak_ptr head_block;
 
     pair<node_ptr, vector<block_id_type> > get_tree_node(const chain_type& chain) {
@@ -186,36 +197,22 @@ private:
         return result;
     }
 
-    node_ptr find_node(const block_id_type& block_id, node_ptr node) const {
-        std::queue<node_ptr> queue {{ node }};
-
-        while (queue.size()) {
-            auto top_node = queue.front();
-            queue.pop();
-
-            if (top_node->block_id == block_id) {
-                return top_node;
-            }
-
-            for (auto&& adj_node: top_node->adjacent_nodes) {
-                queue.push(adj_node);
-            }
-        }
-
-        return nullptr;
-    }
-
     void insert_blocks(node_ptr node, const vector<block_id_type>& blocks, const public_key_type& creator_key,
             const set<public_key_type>& active_bp_keys) {
         for (const auto& block_id : blocks) {
             auto next_node = node->get_matching_node(block_id);
             if (!next_node) {
-                next_node = std::make_shared<NodeType>(NodeType{block_id,
-                                                                      {},
-                                                                      {},
-                                                                      node,
-                                                                      creator_key,
-                                                                      active_bp_keys});
+                next_node = shared_ptr<NodeType>(new NodeType{block_id,
+                                                              {},
+                                                              {},
+                                                              node,
+                                                              creator_key,
+                                                              active_bp_keys},
+                                                 [this](NodeType *node) {
+                                                        this->block_index.erase(node->block_id);
+                                                        delete node;
+                                                 });
+                block_index[block_id] = weak_ptr<NodeType>(next_node);
                 node->adjacent_nodes.push_back(next_node);
             }
             node = next_node;

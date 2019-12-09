@@ -47,7 +47,7 @@ BOOST_AUTO_TEST_CASE(prefix_chain_two_nodes) try {
     tree.insert(chain, get_pub_key(), {});
     tree.add_confirmations(chain, get_pub_key(), 0);
     auto head = tree.get_final_chain_head(1);
-    BOOST_TEST(head != nullptr);
+    BOOST_TEST(head);
     BOOST_TEST(head->block_id == fc::sha256("a"));
 } FC_LOG_AND_RETHROW()
 
