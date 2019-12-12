@@ -1,0 +1,46 @@
+FROM ubuntu:18.04 AS cdt-patched
+
+# command-line arguments
+ARG nproc=2
+
+# other variables
+ARG cdt_threads_patch=eosio.cdt-allow-set-make-threads.patch
+ARG cdt_linker_patch=fix-linker.patch
+
+WORKDIR /
+COPY cicd/${cdt_threads_patch} /${cdt_threads_patch}
+ADD https://patch-diff.githubusercontent.com/raw/EOSIO/lld/pull/7.patch /${cdt_linker_patch}
+RUN \
+  echo ">>> Installing dependencies ..." && \
+  apt-get update && \
+  apt-get -V -y --no-install-recommends --no-install-suggests install apt-utils ca-certificates && \
+  echo ">>> Some more dependencies (because eosio.cdt/build.sh doesn't support noninteractive mode) ..." && \
+  apt-get -V -y --no-install-recommends --no-install-suggests install \
+    git \
+    \
+    clang-4.0 lldb-4.0 libclang-4.0-dev cmake make automake libbz2-dev libssl-dev \
+    libgmp3-dev autotools-dev build-essential libicu-dev python2.7-dev python3-dev \
+    autoconf libtool curl zlib1g-dev doxygen graphviz && \
+  \
+  echo ">>> Cloning git repository ... " && \
+  echo ">>> INFO:" && \
+  echo " * tarball https://github.com/EOSIO/eosio.cdt/archive/v1.6.3.tar.gz doesn't contain" && \
+  echo "   submodule sources (e.g. eosio_llvm), so may not be used for building CDT" && \
+  echo " * shallow copying allows to reduce the amount of cloned data" && \
+  git clone --recurse-submodules -b v1.6.3 --shallow-since=2019-01-01 https://github.com/EOSIO/eosio.cdt.git && \
+  \
+  cd eosio.cdt/ && \
+  \
+  echo ">>> Applying patch for single-thread compiling ..." && \
+  patch -p1 -d eosio_llvm/tools/lld/ -i /${cdt_linker_patch} && \
+  echo "Applying patch to allow seting build threads number from the outside ..." && \
+  patch -p0 -i /${cdt_threads_patch} && \
+  \
+  echo ">>> Compiling ..." && \
+  env CORES=${nproc} ./build.sh && \
+  \
+  echo ">>> Generating deb package and moving it to / ..." && \
+  cd build/packages/ && bash -x ./generate_package.sh deb && mv eosio.cdt_1.6.3-1_amd64.deb / && \
+  \
+  echo ">>> Cleaning ..." && \
+  cd / && rm -rf eosio.cdt ${cdt_threads_patch} ${cdt_linker_patch}

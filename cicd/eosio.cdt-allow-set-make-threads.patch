@@ -1,0 +1,19 @@
+--- build.sh.orig	2019-12-11 21:03:30.371359494 +0300
++++ build.sh	2019-12-11 21:05:08.891353621 +0300
+@@ -75,10 +75,12 @@
+    FREE_MEM=`LC_ALL=C free | grep "Mem:" | awk '{print $4}'`
+ fi
+ 
+-CORES_AVAIL=`getconf _NPROCESSORS_ONLN`
+-MEM_CORES=$(( ${FREE_MEM}/4000000 )) # 4 gigabytes per core
+-MEM_CORES=$(( $MEM_CORES > 0 ? $MEM_CORES : 1 ))
+-CORES=$(( $CORES_AVAIL < $MEM_CORES ? $CORES_AVAIL : $MEM_CORES ))
++if [[ -z "$CORES" ]]; then
++   CORES_AVAIL=`getconf _NPROCESSORS_ONLN`
++   MEM_CORES=$(( ${FREE_MEM}/4000000 )) # 4 gigabytes per core
++   MEM_CORES=$(( $MEM_CORES > 0 ? $MEM_CORES : 1 ))
++   CORES=$(( $CORES_AVAIL < $MEM_CORES ? $CORES_AVAIL : $MEM_CORES ))
++fi
+ 
+ #check submodules
+ if [ $(( $(git submodule status --recursive | grep -c "^[+\-]") )) -gt 0 ]; then
