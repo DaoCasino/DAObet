@@ -34,7 +34,7 @@ public:
     randpa_round(uint32_t num,
         const public_key_type& primary,
         const prefix_tree_ptr& tree,
-        const signature_provider_type& signature_provider,
+        const std::vector<signature_provider_type>& signature_providers,
         prevote_bcaster_type && prevote_bcaster,
         precommit_bcaster_type && precommit_bcaster,
         done_cb_type && done_cb
@@ -42,7 +42,7 @@ public:
         num(num),
         primary(primary),
         tree(tree),
-        signature_provider(signature_provider),
+        signature_providers(signature_providers),
         prevote_bcaster(std::move(prevote_bcaster)),
         precommit_bcaster(std::move(precommit_bcaster)),
         done_cb(std::move(done_cb))
@@ -147,7 +147,7 @@ private:
         auto chain = tree->get_branch(last_node->block_id);
 
         auto prevote = prevote_type { num, chain.base_block, std::move(chain.blocks) };
-        auto msg = prevote_msg(prevote, signature_provider);
+        auto msg = prevote_msg(prevote, signature_providers);
         add_prevote(msg);
         prevote_bcaster(msg);
     }
@@ -157,7 +157,7 @@ private:
         state = state::precommit;
 
         auto precommit = precommit_type { num, best_node->block_id };
-        auto msg = precommit_msg(precommit, signature_provider);
+        auto msg = precommit_msg(precommit, signature_providers);
 
         add_precommit(msg);
 
@@ -173,9 +173,11 @@ private:
             return false;
         }
 
-        if (prevoted_keys.count(msg.public_key())) {
-            dlog("Randpa received prevote second time for key");
-            return false;
+        for (const auto& public_key : msg.public_keys()) {
+            if (prevoted_keys.count(public_key)) {
+                dlog("Randpa received prevote second time for key");
+                return false;
+            }
         }
 
         auto node = find_last_node(msg.data.base_block, msg.data.blocks);
@@ -185,11 +187,13 @@ private:
             return false;
         }
 
-        if (!node->active_bp_keys.count(msg.public_key())) {
-            dlog("Randpa received prevote for block from not active producer, id : ${id}",
-                ("id", node->block_id)
-            );
-            return false;
+        for (const auto& public_key : msg.public_keys()) {
+            if (!node->active_bp_keys.count(public_key)) {
+                dlog("Randpa received prevote for block from not active producer, id : ${id}",
+                    ("id", node->block_id)
+                );
+                return false;
+            }
         }
 
         return true;
@@ -204,9 +208,11 @@ private:
             return false;
         }
 
-        if (precommited_keys.count(msg.public_key())) {
-            dlog("Randpa received precommit second time for key");
-            return false;
+        for (const auto& public_key : msg.public_keys()) {
+            if (precommited_keys.count(public_key)) {
+                dlog("Randpa received precommit second time for key");
+                return false;
+            }
         }
 
         if (msg.data.block_id != best_node->block_id) {
@@ -217,49 +223,57 @@ private:
             return false;
         }
 
-        if (!best_node->has_confirmation(msg.public_key())) {
-            dlog("Randpa received precommit from not prevoted peer");
-            return false;
+        for (const auto& public_key : msg.public_keys()) {
+            if (!best_node->has_confirmation(public_key)) {
+                dlog("Randpa received precommit from not prevoted peer");
+                return false;
+            }
         }
 
         return true;
     }
 
     void add_prevote(const prevote_msg& msg) {
-        auto max_prevote_node = tree->add_confirmations({ msg.data.base_block, msg.data.blocks },
-                                msg.public_key(), std::make_shared<prevote_msg>(msg));
+        auto public_keys = msg.public_keys();
+        for (const auto& public_key : public_keys) {
+            auto max_prevote_node = tree->add_confirmations({ msg.data.base_block, msg.data.blocks },
+                                    public_key, std::make_shared<prevote_msg>(msg));
 
-        FC_ASSERT(max_prevote_node, "confirmation should be insertable");
+            FC_ASSERT(max_prevote_node, "confirmation should be insertable");
 
-        prevoted_keys.insert(msg.public_key());
-        dlog("Prevote inserted, round: ${r}, from: ${f}, max_confs: ${c}",
-            ("r", num)
-            ("f", msg.public_key())
-            ("c", max_prevote_node->confirmation_number())
-        );
-
-        if (has_threshold_prevotes(max_prevote_node)) {
-            state = state::ready_to_precommit;
-            best_node = max_prevote_node;
-            dlog("Prevote threshold reached, round: ${r}, best block: ${b}",
+            prevoted_keys.insert(public_key);
+            dlog("Prevote inserted, round: ${r}, from: ${f}, max_confs: ${c}",
                 ("r", num)
-                ("b", best_node->block_id)
+                ("f", public_key)
+                ("c", max_prevote_node->confirmation_number())
             );
-            return;
+
+            if (has_threshold_prevotes(max_prevote_node)) {
+                state = state::ready_to_precommit;
+                best_node = max_prevote_node;
+                dlog("Prevote threshold reached, round: ${r}, best block: ${b}",
+                    ("r", num)
+                    ("b", best_node->block_id)
+                );
+                return;
+            }
         }
     }
 
     void add_precommit(const precommit_msg& msg) {
-        precommited_keys.insert(msg.public_key());
-        proof.precommits.push_back(msg);
+        for (const auto& public_key : msg.public_keys()) {
+            precommited_keys.insert(public_key);
+            proof.precommits.push_back(msg);
 
-        if (proof.precommits.size() > 2 * best_node->active_bp_keys.size() / 3) {
-            dlog("Precommit threshold reached, round: ${r}, best block: ${b}",
-                ("r", num)
-                ("b", best_node->block_id)
-            );
-            state = state::done;
-            done_cb();
+            if (proof.precommits.size() > 2 * best_node->active_bp_keys.size() / 3) {
+                dlog("Precommit threshold reached, round: ${r}, best block: ${b}",
+                    ("r", num)
+                    ("b", best_node->block_id)
+                );
+                state = state::done;
+                done_cb();
+                return;
+            }
         }
     }
 
@@ -286,7 +300,7 @@ private:
     state state { state::init };
     proof_type proof;
     tree_node_ptr best_node;
-    signature_provider_type signature_provider;
+    std::vector<signature_provider_type> signature_providers;
     prevote_bcaster_type prevote_bcaster;
     precommit_bcaster_type precommit_bcaster;
     done_cb_type done_cb;

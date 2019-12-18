@@ -199,9 +199,9 @@ public:
           _self_messages{_messages_cache_size},
           _last_proofs{_proofs_cache_size} {
         auto private_key = private_key_type::generate();
-        _signature_provider = [private_key](const digest_type& digest) {
+        _signature_providers.push_back([private_key](const digest_type& digest) {
             return private_key.sign(digest);
-        };
+        });
     }
 
     randpa& set_in_net_channel(const net_channel_ptr& ptr) {
@@ -224,10 +224,14 @@ public:
         return *this;
     }
 
+    void erase_signature_providers() {
+        _signature_providers.erase(_signature_providers.begin(), _signature_providers.end());
+    }
+
     randpa& set_signature_provider(const signature_provider_type& signature_provider,
         const public_key_type& public_key) {
-        _signature_provider = signature_provider;
-        _public_key = public_key;
+        _signature_providers.push_back(signature_provider);
+        _public_keys.push_back(public_key);
         _provided_bp_key = true;
         randpa_dlog("set signature provider: ${p}", ("p", public_key));
         return *this;
@@ -287,8 +291,8 @@ private:
 
     std::unique_ptr<std::thread> _thread_ptr;
     std::atomic<bool> _done { false };
-    signature_provider_type _signature_provider;
-    public_key_type _public_key;
+    std::vector<signature_provider_type> _signature_providers;
+    std::vector<public_key_type> _public_keys;
     prefix_tree_ptr _prefix_tree;
     randpa_round_ptr _round;
     block_id_type _lib;                              // last irreversible block
@@ -371,7 +375,7 @@ private:
     template <typename T>
     bool check_is_valid_msg(const T& msg) const {
         try {
-            msg.public_key();
+            msg.public_keys();
         } catch (const fc::exception&) {
             return false;
         }
@@ -487,28 +491,30 @@ private:
         const auto& bp_keys = node->active_bp_keys;
 
         for (const auto& prevote : proof.prevotes) {
-            const auto& prevoter_pub_key = prevote.public_key();
-            if (!validate_prevote(prevote.data, prevoter_pub_key, best_block, bp_keys)) {
-                randpa_dlog("Prevote validation failed, base_block: ${id}, blocks: ${blocks}",
-                     ("id", prevote.data.base_block)
-                     ("blocks", prevote.data.blocks));
-                return false;
+            for (const auto& prevoter_pub_key : prevote.public_keys()) {
+                if (!validate_prevote(prevote.data, prevoter_pub_key, best_block, bp_keys)) {
+                    randpa_dlog("Prevote validation failed, base_block: ${id}, blocks: ${blocks}",
+                        ("id", prevote.data.base_block)
+                        ("blocks", prevote.data.blocks));
+                    return false;
+                }
+                prevoted_keys.insert(prevoter_pub_key);
             }
-            prevoted_keys.insert(prevoter_pub_key);
         }
 
         for (const auto& precommit : proof.precommits) {
-            const auto& precommiter_pub_key = precommit.public_key();
-            if (!prevoted_keys.count(precommiter_pub_key)) {
-                randpa_dlog("Precommiter has not prevoted, pub_key: ${pub_key}", ("pub_key", precommiter_pub_key));
-                return false;
-            }
+            for (const auto& precommiter_pub_key : precommit.public_keys()) {
+                if (!prevoted_keys.count(precommiter_pub_key)) {
+                    randpa_dlog("Precommiter has not prevoted, pub_key: ${pub_key}", ("pub_key", precommiter_pub_key));
+                    return false;
+                }
 
-            if (!validate_precommit(precommit.data, precommiter_pub_key, best_block, bp_keys)) {
-                randpa_dlog("Precommit validation failed for ${id}", ("id", precommit.data.block_id));
-                return false;
+                if (!validate_precommit(precommit.data, precommiter_pub_key, best_block, bp_keys)) {
+                    randpa_dlog("Precommit validation failed for ${id}", ("id", precommit.data.block_id));
+                    return false;
+                }
+                precommited_keys.insert(precommiter_pub_key);
             }
-            precommited_keys.insert(precommiter_pub_key);
         }
         return precommited_keys.size() > node->active_bp_keys.size() * 2 / 3;
     }
@@ -528,7 +534,7 @@ private:
             randpa_dlog("no need to get finality proof for block producer node");
             return;
         }
-        send(ses_id, finality_req_proof_msg{{data.round_num}, _signature_provider});
+        send(ses_id, finality_req_proof_msg{{data.round_num}, _signature_providers});
     }
 
     void on(uint32_t ses_id, const finality_req_proof_msg& msg) {
@@ -537,7 +543,7 @@ private:
         for (const auto& proof : _last_proofs) {
             if (proof.round_num == data.round_num) {
                 randpa_dlog("proof found; sending it");
-                send(ses_id, proof_msg{proof, _signature_provider});
+                send(ses_id, proof_msg{proof, _signature_providers});
                 break;
             }
         }
@@ -569,7 +575,9 @@ private:
         }
 
         if (!validate_proof(proof)) {
-            randpa_ilog("Invalid proof from ${peer}", ("peer", msg.public_key()));
+            for (const auto& public_key : msg.public_keys()) {
+                randpa_ilog("Invalid proof among ${peer}", ("peer", public_key));
+            }
             randpa_dlog("Proof msg: ${msg}", ("msg", msg));
             return;
         }
@@ -584,22 +592,26 @@ private:
     }
 
     void on(uint32_t ses_id, const handshake_msg& msg) {
-        randpa_ilog("Randpa handshake_msg received, ses_id: ${ses_id}, from: ${pk}", ("ses_id", ses_id)("pk", msg.public_key()));
-        try {
-            _peers[msg.public_key()] = ses_id;
+        for (const auto& public_key : msg.public_keys()) {
+            randpa_ilog("Randpa handshake_msg received, ses_id: ${ses_id}, from: ${pk}", ("ses_id", ses_id)("pk", public_key));
+            try {
+                _peers[public_key] = ses_id;
 
-            send(ses_id, handshake_ans_msg(handshake_ans_type { _lib }, _signature_provider));
-        } catch (const fc::exception& e) {
-            randpa_elog("Randpa handshake_msg handler error, reason: ${e}", ("e", e.what()));
+                send(ses_id, handshake_ans_msg(handshake_ans_type { _lib }, _signature_providers));
+            } catch (const fc::exception& e) {
+                randpa_elog("Randpa handshake_msg handler error, reason: ${e}", ("e", e.what()));
+            }
         }
     }
 
     void on(uint32_t ses_id, const handshake_ans_msg& msg) {
-        randpa_ilog("Randpa handshake_ans_msg received, ses_id: ${ses_id}, from: ${pk}", ("ses_id", ses_id)("pk", msg.public_key()));
-        try {
-            _peers[msg.public_key()] = ses_id;
-        } catch (const fc::exception& e) {
-            randpa_elog("Randpa handshake_ans_msg handler error, reason: ${e}", ("e", e.what()));
+        for (const auto& public_key : msg.public_keys()) {
+            randpa_ilog("Randpa handshake_ans_msg received, ses_id: ${ses_id}, from: ${pk}", ("ses_id", ses_id)("pk", public_key));
+            try {
+                _peers[public_key] = ses_id;
+            } catch (const fc::exception& e) {
+                randpa_elog("Randpa handshake_ans_msg handler error, reason: ${e}", ("e", e.what()));
+            }
         }
     }
 
@@ -663,7 +675,7 @@ private:
 
     void on(const on_new_peer_event& event) {
         randpa_dlog("Randpa on_new_peer_event event handled, ses_id: ${ses_id}", ("ses_id", event.ses_id));
-        auto msg = handshake_msg(handshake_type{_lib}, _signature_provider);
+        auto msg = handshake_msg(handshake_type{_lib}, _signature_providers);
         send(event.ses_id, msg);
     }
 
@@ -673,7 +685,7 @@ private:
 
         _last_prooved_block_num = get_block_num(proof.best_block);
         _finality_channel->send(proof.best_block);
-        bcast(finality_notice_msg{{proof.round_num, proof.best_block}, _signature_provider});
+        bcast(finality_notice_msg{{proof.round_num, proof.best_block}, _signature_providers});
     }
 
     template <typename T>
@@ -744,7 +756,12 @@ private:
             return false;
         }
 
-        return node_ptr->active_bp_keys.count(_public_key);
+        for (const auto& public_key : _public_keys) {
+            if (node_ptr->active_bp_keys.count(public_key)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     void finish_round() {
@@ -771,7 +788,7 @@ private:
     }
 
     void new_round(uint32_t round_num, const public_key_type& primary) {
-        _round.reset(new randpa_round(round_num, primary, _prefix_tree, _signature_provider,
+        _round.reset(new randpa_round(round_num, primary, _prefix_tree, _signature_providers,
         [this](const prevote_msg& msg) {
             bcast(msg);
         },

@@ -301,29 +301,36 @@ void randpa_plugin::plugin_initialize(const variables_map& options) {
     if (key_spec_pair_vector.empty()) {
         return;
     }
-    const std::string key_spec_pair = key_spec_pair_vector[0];
+    else {
+        my->_randpa.erase_signature_providers();
+    }
 
+    std::string temp_key_spec_pair;
+    vector<signature_provider_type> temp;
     try {
-        auto delim = key_spec_pair.find("=");
-        EOS_ASSERT(delim != std::string::npos, plugin_config_exception, "Missing \"=\" in the key spec pair");
-        auto pub_key_str = key_spec_pair.substr(0, delim);
-        auto spec_str = key_spec_pair.substr(delim + 1);
+        for (const std::string& key_spec_pair : key_spec_pair_vector) {
+            temp_key_spec_pair = key_spec_pair;
+            auto delim = key_spec_pair.find("=");
+            EOS_ASSERT(delim != std::string::npos, plugin_config_exception, "Missing \"=\" in the key spec pair");
+            auto pub_key_str = key_spec_pair.substr(0, delim);
+            auto spec_str = key_spec_pair.substr(delim + 1);
 
-        auto spec_delim = spec_str.find(":");
-        EOS_ASSERT(spec_delim != std::string::npos, plugin_config_exception, "Missing \":\" in the key spec pair");
-        auto spec_type_str = spec_str.substr(0, spec_delim);
-        auto spec_data = spec_str.substr(spec_delim + 1);
+            auto spec_delim = spec_str.find(":");
+            EOS_ASSERT(spec_delim != std::string::npos, plugin_config_exception, "Missing \":\" in the key spec pair");
+            auto spec_type_str = spec_str.substr(0, spec_delim);
+            auto spec_data = spec_str.substr(spec_delim + 1);
 
-        auto pubkey = public_key_type(pub_key_str);
+            auto pubkey = public_key_type(pub_key_str);
 
-        if (spec_type_str == "KEY") {
-           my->_randpa.set_signature_provider(make_key_signature_provider(private_key_type(spec_data)), pubkey);
-        } else if (spec_type_str == "KEOSD") {
-           my->_randpa.set_signature_provider(make_keosd_signature_provider(spec_data, pubkey), pubkey);
+            if (spec_type_str == "KEY") {
+                my->_randpa.set_signature_provider(make_key_signature_provider(private_key_type(spec_data)), pubkey);
+            } else if (spec_type_str == "KEOSD") {
+                my->_randpa.set_signature_provider(make_keosd_signature_provider(spec_data, pubkey), pubkey);
+            }
+
         }
-
     } catch (...) {
-        randpa_elog("Malformed signature provider: \"${val}\", ignoring!", ("val", key_spec_pair));
+        randpa_elog("Malformed signature provider: \"${val}\", ignoring!", ("val", temp_key_spec_pair));
     }
 }
 

@@ -125,6 +125,7 @@ BOOST_AUTO_TEST_SUITE(prevote_tests)
 BOOST_AUTO_TEST_CASE(prevote_validate_success) try {
     auto priv_key = private_key::generate();
     auto pub_key = priv_key.get_public_key();
+    std::vector<public_key> pub_keys {pub_key};
 
     auto prevote = prevote_type {
         0,
@@ -132,12 +133,13 @@ BOOST_AUTO_TEST_CASE(prevote_validate_success) try {
         { fc::sha256("b"), fc::sha256("c"), fc::sha256("d") }
     };
 
-    auto msg = prevote_msg(prevote, make_key_signature_provider(priv_key));
+    std::vector<signature_provider_type> key_signature_providers {make_key_signature_provider(priv_key)};
+    auto msg = prevote_msg(prevote, key_signature_providers);
 
     BOOST_TEST(prevote.round_num == msg.data.round_num);
     BOOST_TEST(prevote.base_block == msg.data.base_block);
     BOOST_TEST(prevote.blocks == msg.data.blocks);
-    BOOST_TEST(true == msg.validate(pub_key));
+    BOOST_TEST(true == msg.validate(pub_keys));
 
 } FC_LOG_AND_RETHROW()
 
@@ -151,15 +153,17 @@ BOOST_AUTO_TEST_CASE(prevote_validate_fail) try {
         { fc::sha256("b"), fc::sha256("c"), fc::sha256("d") }
     };
 
-    auto msg = prevote_msg(prevote, make_key_signature_provider(priv_key));
+    std::vector<signature_provider_type> key_signature_providers {make_key_signature_provider(priv_key)};
+    auto msg = prevote_msg(prevote, key_signature_providers);
 
     auto priv_key_2 = private_key::generate();
     auto pub_key_2 = priv_key_2.get_public_key();
+    std::vector<public_key> pub_keys_2 {pub_key_2};
 
     BOOST_TEST(prevote.round_num == msg.data.round_num);
     BOOST_TEST(prevote.base_block == msg.data.base_block);
     BOOST_TEST(prevote.blocks == msg.data.blocks);
-    BOOST_TEST(false == msg.validate(pub_key_2));
+    BOOST_TEST(false == msg.validate(pub_keys_2));
 
 } FC_LOG_AND_RETHROW()
 
@@ -171,17 +175,19 @@ BOOST_AUTO_TEST_SUITE(precommit_tests)
 BOOST_AUTO_TEST_CASE(precommit_validate_success) try {
     auto priv_key = private_key::generate();
     auto pub_key = priv_key.get_public_key();
+    std::vector<public_key> pub_keys {pub_key};
 
     auto precommit = precommit_type {
         0,
         fc::sha256("a")
     };
 
-    auto msg = precommit_msg(precommit, make_key_signature_provider(priv_key));
+    std::vector<signature_provider_type> key_signature_providers {make_key_signature_provider(priv_key)};
+    auto msg = precommit_msg(precommit, key_signature_providers);
 
     BOOST_TEST(precommit.round_num == msg.data.round_num);
     BOOST_TEST(precommit.block_id == msg.data.block_id);
-    BOOST_TEST(true == msg.validate(pub_key));
+    BOOST_TEST(true == msg.validate(pub_keys));
 
 } FC_LOG_AND_RETHROW()
 
@@ -194,14 +200,16 @@ BOOST_AUTO_TEST_CASE(precommit_validate_fail) try {
         fc::sha256("a")
     };
 
-    auto msg = precommit_msg(precommit, make_key_signature_provider(priv_key));
+    std::vector<signature_provider_type> key_signature_providers {make_key_signature_provider(priv_key)};
+    auto msg = precommit_msg(precommit, key_signature_providers);
 
     auto priv_key_2 = private_key::generate();
     auto pub_key_2 = priv_key_2.get_public_key();
+    std::vector<public_key> pub_keys_2 {pub_key_2};
 
     BOOST_TEST(precommit.round_num == msg.data.round_num);
     BOOST_TEST(precommit.block_id == msg.data.block_id);
-    BOOST_TEST(false == msg.validate(pub_key_2));
+    BOOST_TEST(false == msg.validate(pub_keys_2));
 
 } FC_LOG_AND_RETHROW()
 
