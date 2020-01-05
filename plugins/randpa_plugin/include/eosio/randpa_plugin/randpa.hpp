@@ -119,7 +119,7 @@ public:
 
 private:
     std::mutex _message_queue_mutex;
-    bool _need_notify = true;
+    std::atomic<bool> _need_notify { true };
     std::condition_variable _new_msg_cond;
     std::queue<message_ptr> _message_queue;
     std::atomic<bool> _done { false };
