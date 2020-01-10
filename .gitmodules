@@ -1,15 +1,18 @@
 [submodule "libraries/chainbase"]
 	path = libraries/chainbase
 	url = https://github.com/eosio/chainbase
-        ignore = dirty
+	ignore = dirty
 [submodule "libraries/appbase"]
 	path = libraries/appbase
 	url = https://github.com/mixbytes/appbase
-        ignore = dirty
-        branch = queue_thread_safety
+	ignore = dirty
+	branch = queue_thread_safety
 [submodule "libraries/softfloat"]
 	path = libraries/softfloat
 	url = https://github.com/eosio/berkeley-softfloat-3
+[submodule "libraries/fc"]
+	path = libraries/fc
+	url = https://github.com/EOSIO/fc
 [submodule "libraries/wabt"]
 	path = libraries/wabt
 	url = https://github.com/EOSIO/wabt
@@ -19,7 +22,4 @@
 [submodule "plugins/telemetry_plugin/lib/prometheus-cpp"]
 	path = plugins/telemetry_plugin/lib/prometheus-cpp
 	url = git://github.com/jupp0r/prometheus-cpp.git
-    branch = v0.6.0
-[submodule "libraries/fc"]
-	path = libraries/fc
-	url = https://github.com/EOSIO/fc
+	branch = v0.6.0

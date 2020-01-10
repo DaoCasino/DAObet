@@ -22,7 +22,7 @@
 /build-debug/
 
 /doxygen
-/daobet.doxygen
+/*.doxygen
 
 /genesis.json
 

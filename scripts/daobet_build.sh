@@ -331,7 +331,7 @@ printf "| |    | | | |    | |        | | | |    | |\n"
 printf "| |    | | | |    | |  ______/ | | |    | |\n"
 printf "|_|    |_| |_|    |_|  \______/  |_|    |_|\n\n${txtrst}"
 
-printf "\\daobet has been successfully built. %02d:%02d:%02d\\n" $(($TIME_END/3600)) $(($TIME_END%3600/60)) $(($TIME_END%60))
+printf "DAOBet has been successfully built. %02d:%02d:%02d\\n" $(($TIME_END/3600)) $(($TIME_END%3600/60)) $(($TIME_END%60))
 printf "==============================================================================================\\n${bldred}"
 printf "(Optional) Testing Instructions:\\n"
 print_instructions
@@ -339,5 +339,5 @@ printf "${BIN_LOCATION}/mongod --dbpath ${MONGODB_DATA_LOCATION} -f ${MONGODB_CO
 printf "cd ./build && PATH=\$PATH:$INSTALL_PREFIX/opt/mongodb/bin make test\\n" # PATH is set as currently 'mongo' binary is required for the mongodb test
 printf "${txtrst}==============================================================================================\\n"
 printf "For more information:\\n"
-printf "daobet Github: https://github.com/DaoCasino/DAObet\\n"
+printf "DAOBet sources: https://github.com/DaoCasino/DAObet\\n"
 

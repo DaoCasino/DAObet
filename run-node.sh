@@ -1,3 +1,5 @@
+#!/bin/bash
+
 NODE_PATH=$HOME/.dao-node
 NODE_IMAGE='daocasino/daobet:v0.4.0'
 CONFIG_URL='https://explorer.daobet.org/config'

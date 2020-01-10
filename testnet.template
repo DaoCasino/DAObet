@@ -3,6 +3,10 @@
 set -eu
 
 readonly core_symbol=BET
+readonly project=daobet
+
+readonly prog_cli="programs/$project-cli/$project-cli"
+readonly prog_wallet="programs/$project-wallet/$project-wallet"
 
 # set up a wallet just for holding the key used during blockchain ignition
 
@@ -41,7 +45,7 @@ echo "Initializing ignition sequence at $(date)" | tee $logfile
 
 echo "http-server-address = $wdaddr" > $wddir/config.ini
 
-programs/daobet-wallet/daobet-wallet --config-dir $wddir --data-dir $wddir 2> $wddir/wdlog.txt &
+"$prog_wallet" --config-dir $wddir --data-dir $wddir 2> $wddir/wdlog.txt &
 echo $$ > ignition_wallet.pid
 echo keosd log in $wddir/wdlog.txt >> $logfile
 sleep 1
@@ -49,7 +53,7 @@ sleep 1
 ecmd () {
     echo ===== Start: $step ============ >> $logfile
     set -x
-    programs/daobet-cli/daobet-cli  --wallet-url $wdurl --url http://$bioshost:$biosport $* >> $logfile 2>&1
+    "programs/$project-cli/$project-cli"  --wallet-url $wdurl --url http://$bioshost:$biosport $* >> $logfile 2>&1
     set +x
     echo ==== End: $step ============== >> $logfile
     step=$(($step + 1))
@@ -60,7 +64,7 @@ wcmd () {
 }
 
 cacmd () {
-    programs/daobet-cli/daobet-cli \
+    "$prog_cli" \
       --wallet-url $wdurl \
       --url http://$bioshost:$biosport \
       system newaccount \
@@ -113,14 +117,14 @@ ecmd set contract eosio.wrap unittests/contracts/eosio.wrap eosio.wrap.wasm eosi
 
 echo "===== Start: $step ============" >> $logfile
 set -x
-programs/daobet-cli/daobet-cli \
+"$prog_cli" \
   --wallet-url $wdurl \
   --url http://$bioshost:$biosport \
   push action eosio.token create "[ \"eosio\", \"10000000000.0000 $core_symbol\" ]" \
   -p eosio.token \
   >> $logfile 2>&1
 
-programs/daobet-cli/daobet-cli \
+"$prog_cli" \
   --wallet-url $wdurl \
   --url http://$bioshost:$biosport \
   push action eosio.token issue "[ \"eosio\", \"1000000000.0000 $core_symbol\", \"memo\" ]" \
@@ -131,7 +135,7 @@ echo ==== End: $step ============== >> $logfile
 step=$(($step + 1))
 
 ecmd set contract eosio unittests/contracts/eosio.system eosio.system.wasm eosio.system.abi
-programs/daobet-cli/daobet-cli \
+"$prog_cli" \
   --wallet-url $wdurl \
   --url http://$bioshost:$biosport \
   push action eosio init "[0, \"4,$core_symbol\"]" \
@@ -148,4 +152,4 @@ programs/daobet-cli/daobet-cli \
 # ------ DO NOT ALTER THE NEXT LINE -------
 ###INSERT cacmd
 
-pkill -15 daobet-wallet
+pkill -15 "$project-wallet"
