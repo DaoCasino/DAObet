@@ -122,13 +122,12 @@ private:
 
     void init_randpa() {
         randpa_impl = std::unique_ptr<randpa>(new randpa());
-        (*randpa_impl).erase_signature_providers();
         (*randpa_impl)
             .set_event_channel(ev_ch)
             .set_in_net_channel(in_net_ch)
             .set_out_net_channel(out_net_ch)
             .set_finality_channel(finality_ch)
-            .set_signature_provider(make_key_signature_provider(private_key), private_key.get_public_key());
+            .set_signature_providers({make_key_signature_provider(private_key)}, {private_key.get_public_key()});
     }
 
     net_channel_ptr in_net_ch;

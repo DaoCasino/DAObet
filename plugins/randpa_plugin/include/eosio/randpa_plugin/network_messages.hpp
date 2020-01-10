@@ -39,11 +39,7 @@ public:
     }
 
     bool validate(const std::vector<public_key_type>& pub_keys) const {
-        auto publ_keys = public_keys();
-        if (publ_keys.size() != pub_keys.size()) {
-            return false;
-        }
-        return std::equal(publ_keys.begin(), publ_keys.end(), pub_keys.begin());
+        return pub_keys == public_keys();
     }
 };
 

@@ -198,10 +198,6 @@ public:
         : _peer_messages{_messages_cache_size},
           _self_messages{_messages_cache_size},
           _last_proofs{_proofs_cache_size} {
-        auto private_key = private_key_type::generate();
-        _signature_providers.push_back([private_key](const digest_type& digest) {
-            return private_key.sign(digest);
-        });
     }
 
     randpa& set_in_net_channel(const net_channel_ptr& ptr) {
@@ -224,17 +220,21 @@ public:
         return *this;
     }
 
-    void erase_signature_providers() {
-        _signature_providers.erase(_signature_providers.begin(), _signature_providers.end());
+    randpa& set_signature_providers(const vector<signature_provider_type>& signature_providers,
+        const vector<public_key_type>& public_keys) {
+        _signature_providers = signature_providers;
+        _public_keys = public_keys;
+        _provided_bp_key = true;
+        randpa_dlog("set signature providers for ${p}", ("p", public_keys));
+        return *this;
     }
 
-    randpa& set_signature_provider(const signature_provider_type& signature_provider,
-        const public_key_type& public_key) {
+    void add_signature_provider(const signature_provider_type& signature_provider,
+            const public_key_type& public_key) {
         _signature_providers.push_back(signature_provider);
         _public_keys.push_back(public_key);
         _provided_bp_key = true;
-        randpa_dlog("set signature provider: ${p}", ("p", public_key));
-        return *this;
+        randpa_dlog("added signature provider for ${p}", ("p", public_key));
     }
 
     void start(prefix_tree_ptr tree) {
