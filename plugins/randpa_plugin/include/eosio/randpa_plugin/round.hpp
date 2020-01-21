@@ -111,6 +111,11 @@ public:
             return;
         }
 
+        dlog("Prevote for round {r} finished, saving best_block: best_id", 
+            ("r", num)
+            ("best_id", best_node->block_id)
+        );
+
         proof.round_num = num;
         proof.best_block = best_node->block_id;
 
@@ -252,6 +257,12 @@ private:
     void add_precommit(const precommit_msg& msg) {
         precommited_keys.insert(msg.public_key());
         proof.precommits.push_back(msg);
+        
+        dlog("Precommit inserted, round: ${r}, from: ${f}, max_confs: ${c}",
+            ("r", num)
+            ("f", msg.public_key())
+            ("c", best_node->confirmation_number())
+        );
 
         if (proof.precommits.size() > 2 * best_node->active_bp_keys.size() / 3) {
             dlog("Precommit threshold reached, round: ${r}, best block: ${b}",
