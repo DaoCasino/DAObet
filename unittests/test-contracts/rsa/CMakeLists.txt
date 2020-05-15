@@ -1,0 +1,8 @@
+if( EOSIO_COMPILE_TEST_CONTRACTS )
+   add_contract_with_abi( rsa rsa rsa.cpp )
+   target_include_directories( rsa PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} )
+   install( TARGETS rsa DESTINATION ${CMAKE_CURRENT_SOURCE_DIR} )
+else()
+   configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/rsa.wasm ${CMAKE_CURRENT_BINARY_DIR}/rsa.wasm COPYONLY )
+   configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/rsa.abi  ${CMAKE_CURRENT_BINARY_DIR}/rsa.abi  COPYONLY )
+endif()

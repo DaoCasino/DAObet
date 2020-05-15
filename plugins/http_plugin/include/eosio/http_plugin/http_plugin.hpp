@@ -17,7 +17,7 @@ namespace eosio {
     *
     * Arguments: response_code, response_body
     */
-   using url_response_callback = std::function<void(int,string)>;
+   using url_response_callback = std::function<void(int,fc::variant)>;
 
    /**
     * @brief Callback type for a URL handler
@@ -101,7 +101,7 @@ namespace eosio {
         get_supported_apis_result get_supported_apis()const;
 
       private:
-        std::unique_ptr<class http_plugin_impl> my;
+        std::shared_ptr<class http_plugin_impl> my;
    };
 
    /**

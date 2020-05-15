@@ -4,7 +4,6 @@
  */
 #include <eosio/chain/generated_transaction_object.hpp>
 #include <eosio/chain/global_property_object.hpp>
-#include <eosio/chain/producer_object.hpp>
 #include <eosio/testing/tester_network.hpp>
 
 #include <boost/test/unit_test.hpp>
@@ -80,7 +79,8 @@ BOOST_FIXTURE_TEST_CASE( delay_error_create_account, validating_tester) { try {
    auto scheduled_trxs = get_scheduled_transactions();
    BOOST_REQUIRE_EQUAL(scheduled_trxs.size(), 1u);
 
-   auto dtrace = control->push_scheduled_transaction(scheduled_trxs.front(), fc::time_point::maximum());
+   auto billed_cpu_time_us = control->get_global_properties().configuration.min_transaction_cpu_usage;
+   auto dtrace = control->push_scheduled_transaction(scheduled_trxs.front(), fc::time_point::maximum(), billed_cpu_time_us, true);
    BOOST_REQUIRE_EQUAL(dtrace->except.valid(), true);
    BOOST_REQUIRE_EQUAL(dtrace->except->code(), missing_auth_exception::code_value);
 
@@ -261,7 +261,7 @@ BOOST_AUTO_TEST_CASE(delete_auth_test) { try {
       expect_assert_message(e, "permission_query_exception: Permission Query Exception\nFailed to retrieve permission");
       return true;
    });
-   
+
    // update auth
    chain.push_action(config::system_account_name, updateauth::get_name(), tester_account, fc::mutable_variant_object()
            ("account", "tester")

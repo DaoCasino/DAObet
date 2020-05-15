@@ -133,8 +133,8 @@ namespace eosio { namespace chain { namespace resource_limits {
       OBJECT_CTOR(resource_limits_object)
 
       id_type id;
-      account_name owner;
-      bool pending = false;
+      account_name owner; //< owner should not be changed within a chainbase modifier lambda
+      bool pending = false; //< pending should not be changed within a chainbase modifier lambda
 
       int64_t net_weight = -1;
       int64_t cpu_weight = -1;
@@ -162,7 +162,7 @@ namespace eosio { namespace chain { namespace resource_limits {
       OBJECT_CTOR(resource_usage_object)
 
       id_type id;
-      account_name owner;
+      account_name owner; //< owner should not be changed within a chainbase modifier lambda
 
       usage_accumulator        net_usage;
       usage_accumulator        cpu_usage;
@@ -233,7 +233,7 @@ namespace eosio { namespace chain { namespace resource_limits {
        * real maximum block is less, this virtual number is only used for rate limiting users.
        *
        * It's lowest possible value is max_block_size * blocksize_average_window_ms / block_interval
-       * It's highest possible value is 1000 times its lowest possible value
+       * It's highest possible value is config::maximum_elastic_resource_multiplier (1000) times its lowest possible value
        *
        * This means that the most an account can consume during idle periods is 1000x the bandwidth
        * it is gauranteed under congestion.

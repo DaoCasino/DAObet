@@ -15,8 +15,20 @@ cache:
   timeout: 1000
 
 before_script:
-  - docker pull daocasino/daobet-build-tools-$DISTRO
-  - docker tag daocasino/daobet-build-tools-$DISTRO daobet-build-tools-$DISTRO
+  - |
+    # project name
+    PROJ="${TRAVIS_REPO_SLUG##*/}"
+    PROJ="${PROJ,,}"
+    case "$PROJ" in
+    (haya)   readonly ORG=mixbytes ;;
+    (daobet) readonly ORG=daocasino ;;
+    (*) echo >&2 "Bad project name: $PROJ." ; exit 1 ;;
+    esac
+    readonly PROJ="${PROJ,,}" # low case
+    # build-env image name
+    readonly BUILD_IMG="$ORG/$PROJ.build-env.$DISTRO"
+    #
+  - docker pull "$BUILD_IMG"
   - |
     if [[ "$TRAVIS_BRANCH" =~ ^debug- ]]; then
       BUILD_TYPE="Debug"
@@ -24,37 +36,42 @@ before_script:
       BUILD_TYPE="RelWithDebInfo"
     fi
   - |
-    if [ "$TRAVIS_PULL_REQUEST" = "false" ] && [ $BUILD_TYPE != "Debug" ]; then
-      TESTS="simulator|unit_test_wabt"
-    elif [ "$TRAVIS_PULL_REQUEST" != "false" ] && [ $BUILD_TYPE != "Debug" ]; then
-      TESTS="simulator|unit_test_wabt|nodeos_sanity|nodeos_run"
+    if [[ "$BUILD_TYPE" != Debug ]]; then
+      if [[ "$TRAVIS_PULL_REQUEST" == false ]]; then
+        TESTS="simulator|unit_test_wabt"
+      else
+        TESTS="simulator|unit_test_wabt|nodeos_sanity|nodeos_run"
+      fi
     fi
 
+
 script:
-  - ./cicd/run build -d $DISTRO -p --build-type=${BUILD_TYPE} --tests=$TESTS --timeout=2400 daobet
+  - ./cicd/docker-run package --build-type="${BUILD_TYPE}" --tests="$TESTS" --timeout=2400 "$DISTRO"
   - |
-    if [ $DISTRO == "ubuntu" ]; then
-      ./cicd/run build -d $DISTRO -i daocasino/daobet:$TRAVIS_BRANCH daobet
-      docker push daocasino/daobet:$TRAVIS_BRANCH
-      if [ $TRAVIS_BRANCH == "master" ]; then
-        docker tag daocasino/daobet:master daocasino/daobet:latest
-        docker push daocasino/daobet:latest
+    if [[ "$DISTRO" == ubuntu ]]; then
+      ./cicd/docker-run image "$ORG/$PROJ:$TRAVIS_BRANCH"
+      docker push "$ORG/$PROJ:$TRAVIS_BRANCH"
+      if [[ "$TRAVIS_BRANCH" == master ]]; then
+        docker tag "$ORG/$PROJ:master" "$ORG/$PROJ:latest"
+        docker push "$ORG/$PROJ:latest"
       fi
     fi
 
 deploy:
   provider: releases
   api_key:
-    secure: "RF1x7wC+9wEFNwOVnuTYtKDdaPSRtKlPHZxuz7RkmJK6kpYcB42cBuRjX7eceW350GKNUcd0lD4Me9iyy2KBMhtsLJVDjjhRg4StyQJ9Iyn/CteY4bFWwq6WtW1KTpbs1y6fS68rgm25XWJlyZ6fdm99/hZ1XFkE1bFuaEYIoDyVJzeVgvn8iRrUONzRCzz5g3UbE8RJPkbcfnunSdbeIowZVPJMtnN9GVuvKFLyJT+g8p+nuVC/g0xhepWh5bMSXdoHrRai1rm0nZ2i23m+DYKfU8EZfl29Imc7qfWKAtXmWatwKsXtX6aWFaTYyKEIBJqCVrjet1f23EvcSa4LfgusRtTs+7miCTX0VxYDzRY4/ggr6/Xlr7dS46Yg7v99djW8Xrue/2tYARXWTwRXbDT/AiewWFLHaaodNIJidjSo+sMew1pXQRTs7Th3a4YACAWV90W2joS606LhbVhuAP3VDlN1nObsI8Tz8is1TNUD8/Sq8CxZg1uhQZkN8zKyRHlsrxddxW/rxeh+RUSQPOaF/ZsRaqrPoIAripw0harzWFJP+Zyy+sTTVVcovkPHrYji9TpKZ2p7I7Td9BVULdQyg5bhVXWpROlaDFV+/KzT/bjiVMSx9nsSp2IH9SkDB2Q4fHe8fJNMIqO+GHzOno+vF11cKj1aOkSqa4WVcbQ="
+    # github: Settings -> Developer settings -> Personal access tokens -> Generate new token
+    # in repo root: travis login ; travis encrypt <github token>
+    secure: "xUhriORtlo7hW+l6BDi7y6OkkWF+tpfLrK8nutcHRSTxglFDlpqRrEylzhMctcNdy0yYYbKHp7pSylATX0855ydyXvikyBCZ/6l7DtgikNbKHAWWv9BP61oQezH7Ij+DiKNxWprhKxhEl7CieubRRpnXZwnIvV+kaJBV6UEVmka3SPQ0qLNTIJaXF6vYCmlLZIlaF0hX76T2zGm3hu1kEQ4SEoSPFNEPv5ebfY5wV5XmOSnEqBjjzkOxpzayLT5PLTZEfLvP3kekGuqyQgJHDwvAdCoVO12JfQhWD2AaPrNSeTzDxL1QOZeG9hTeBAbReS0a0LEUdsZyvK72jDTTtJdgxL4CzQhDIAdNS8yP4xLQFSRM5xN0s7O31nl1obhinknWTZEah63n8PpPPfO4O5mIwJWnzlAQ3vHl2LeETur0vB7ghw9cvSiGd3u/ojVZROjluJbDOQVdxrqw2dTwCpriFqrGrY52lu5qSwcbUphpOfO4ZCmo2Wmw+Z1I9h+tQIya3r9toemYsfi8cmml1w50hRTdpcQkK7UPsHpw5R2u5JtdsDvOZ12iTpdSFhuxQwyQmi/JQpmMWgLXpZPHZMvKylVR55O9oe4GTNMfz91iA0+2rO79dukODf5HKiWqCvuLQKyFHyDyjDpiQLl1BjZx7SUwp3Ud4Y/hed6Vfnc="
   file_glob: true
-  file: build/pkgs/*
+  file: build/packages/*
   skip_cleanup: true
   overwrite: true
   on:
     tags: true
+  verbose: true
 
 env:
   matrix:
     - "DISTRO=ubuntu"
     - "DISTRO=centos"
-

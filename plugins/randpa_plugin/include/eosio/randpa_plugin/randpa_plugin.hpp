@@ -1,11 +1,12 @@
 #pragma once
+
 #include <appbase/application.hpp>
 #include <eosio/net_plugin/net_plugin.hpp>
 
 namespace eosio {
 
-using namespace appbase;
-
+/// Randpa plugin.
+///
 class randpa_plugin : public appbase::plugin<randpa_plugin> {
 public:
     randpa_plugin();
@@ -17,9 +18,10 @@ public:
     void plugin_initialize(const variables_map& options);
     void plugin_startup();
     void plugin_shutdown();
+    void handle_sighup() override;
 
 private:
     std::unique_ptr<class randpa_plugin_impl> my;
 };
 
-}
+} // namespace eosio

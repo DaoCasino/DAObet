@@ -5,7 +5,7 @@ set -eu
 PROGNAME="$( basename -- "$0" )"
 PROGPATH="$( readlink -f "$( dirname "$0" )" )"
 
-PRODUCT_NAME=haya
+PRODUCT_NAME=daobet
 
 usage() {
   echo >&2 "Usage example for topology 11--12--13, where 11 is a block producer, 12 and 13"

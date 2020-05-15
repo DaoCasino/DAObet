@@ -5,7 +5,7 @@
 #pragma once
 #include <appbase/application.hpp>
 #include <eosio/http_plugin/http_plugin.hpp>
-#include <eosio/bnet_plugin/bnet_plugin.hpp>
+#include <eosio/net_plugin/net_plugin.hpp>
 
 namespace eosio {
 
@@ -16,7 +16,7 @@ public:
    custom_message_test_plugin();
    ~custom_message_test_plugin();
 
-   APPBASE_PLUGIN_REQUIRES((http_plugin)(bnet_plugin))
+   APPBASE_PLUGIN_REQUIRES((http_plugin)(net_plugin))
    virtual void set_program_options(options_description&, options_description& cfg) override;
  
    void plugin_initialize(const variables_map& options);

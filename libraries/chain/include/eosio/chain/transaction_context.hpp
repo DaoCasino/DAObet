@@ -57,9 +57,12 @@ namespace eosio { namespace chain {
 
          void validate_referenced_accounts( const transaction& trx, bool enforce_actor_whitelist_blacklist )const;
 
+///@{
+/// HAYA: [cyb-280] add tx sponsorship
 #ifdef ENABLE_TX_SPONSORSHIP
          fc::optional<account_name> get_sponsor() const;
 #endif
+///@}
 
       private:
 
@@ -68,14 +71,30 @@ namespace eosio { namespace chain {
 
          void add_ram_usage( account_name account, int64_t ram_delta );
 
-         void dispatch_action( action_trace& trace, const action& a, account_name receiver, bool context_free = false, uint32_t recurse_depth = 0 );
-         inline void dispatch_action( action_trace& trace, const action& a, bool context_free = false ) {
-            dispatch_action(trace, a, a.account, context_free);
-         };
+         action_trace& get_action_trace( uint32_t action_ordinal );
+         const action_trace& get_action_trace( uint32_t action_ordinal )const;
+
+         /** invalidates any action_trace references returned by get_action_trace */
+         uint32_t schedule_action( const action& act, account_name receiver, bool context_free,
+                                   uint32_t creator_action_ordinal, uint32_t closest_unnotified_ancestor_action_ordinal );
+
+         /** invalidates any action_trace references returned by get_action_trace */
+         uint32_t schedule_action( action&& act, account_name receiver, bool context_free,
+                                   uint32_t creator_action_ordinal, uint32_t closest_unnotified_ancestor_action_ordinal );
+
+         /** invalidates any action_trace references returned by get_action_trace */
+         uint32_t schedule_action( uint32_t action_ordinal, account_name receiver, bool context_free,
+                                   uint32_t creator_action_ordinal, uint32_t closest_unnotified_ancestor_action_ordinal );
+
+         void execute_action( uint32_t action_ordinal, uint32_t recurse_depth );
+
          void schedule_transaction();
          void record_transaction( const transaction_id_type& id, fc::time_point_sec expire );
 
-         void validate_cpu_usage_to_bill( int64_t u, bool check_minimum = true )const;
+         void validate_cpu_usage_to_bill( int64_t billed_us, int64_t account_cpu_limit, bool check_minimum )const;
+         void validate_account_cpu_usage( int64_t billed_us, int64_t account_cpu_limit, bool estimate )const;
+
+         void disallow_transaction_extensions( const char* error_msg )const;
 
       /// Fields:
       public:
@@ -103,7 +122,7 @@ namespace eosio { namespace chain {
          bool                          enforce_whiteblacklist = true;
 
          fc::time_point                deadline = fc::time_point::maximum();
-         fc::microseconds              leeway = fc::microseconds(3000);
+         fc::microseconds              leeway = fc::microseconds( config::default_subjective_cpu_leeway_us );
          int64_t                       billed_cpu_time_us = 0;
          bool                          explicit_billed_cpu_time = false;
 

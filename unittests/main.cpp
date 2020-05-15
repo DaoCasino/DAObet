@@ -2,6 +2,12 @@
  *  @file
  *  @copyright defined in eos/LICENSE
  */
+
+/// Use the following command to run tests with maximum verbosity level:
+///
+///   cd build/
+///   ./unittests/unit_test -l all -r detailed -t protocol_feature_tests -- --verbose
+
 #include <cstdlib>
 
 #include <iostream>

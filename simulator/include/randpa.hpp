@@ -2,6 +2,7 @@
 
 #include "database.hpp"
 #include "simulator.hpp"
+#include "log.hpp"
 
 #define SYNC_RANDPA //SYNC mode
 #include <eosio/randpa_plugin/randpa.hpp>
@@ -14,21 +15,16 @@ using namespace randpa_finality;
 
 using randpa_ptr = std::unique_ptr<randpa>;
 
-static signature_provider_type make_key_signature_provider(const private_key_type& key) {
-   return [key]( const digest_type& digest ) {
-      return key.sign(digest);
-   };
-}
+//---------- types ----------//
 
 class RandpaNode: public Node {
 public:
-    explicit RandpaNode(int id, Network && net, fork_db && db_, private_key_type private_key):
-        Node(id, std::move(net), std::move(db_), std::move(private_key))
+    explicit RandpaNode(uint32_t id, node_type type, Network && net, fork_db && db_, private_key_type private_key)
+        : Node{id, type, std::move(net), std::move(db_), std::move(private_key)}
     {
         init();
-        prefix_tree_ptr tree(new prefix_tree(std::make_shared<tree_node>(tree_node {
-            db.last_irreversible_block_id()
-        })));
+        tree_node_unique_ptr root = std::make_unique<tree_node>(tree_node { db.last_irreversible_block_id() });;
+        prefix_tree_ptr tree(new prefix_tree(std::move(root)));
         randpa_impl->start(tree);
     }
 
@@ -37,22 +33,8 @@ public:
         init_randpa();
     }
 
-    virtual void restart() override {
-        std::cout << "[Node] #" << id << " restarted " << std::endl;
-        init();
-        randpa_impl->start(copy_fork_db());
-        auto runner = get_runner();
-        auto from = this->id;
-        for (uint32_t to = 0; to < runner->get_instances(); to++) {
-            int delay = runner->get_delay_matrix()[from][to];
-            if (from != to && delay != -1) {
-                on_new_peer_event(to);
-            }
-        }
-    }
-
     prefix_tree_ptr copy_fork_db() {
-        tree_node_ptr root = std::make_shared<tree_node>(tree_node { db.last_irreversible_block_id() });;
+        tree_node_unique_ptr root = std::make_unique<tree_node>(tree_node { db.last_irreversible_block_id() });;
         prefix_tree_ptr tree(new prefix_tree(std::move(root)));
         std::queue<fork_db_node_ptr> q;
         q.push(db.get_root());
@@ -75,7 +57,7 @@ public:
     }
 
     void on_receive(uint32_t from, void* msg) override {
-        std::cout << "[Node] #" << this->id << " on_receive " << std::endl;
+        logger << "[Node] #" << id << " on_receive " << std::endl;
         auto data = *static_cast<randpa_net_msg*>(msg);
         data.ses_id = from;
         data.receive_time = fc::time_point::now();
@@ -83,15 +65,38 @@ public:
     }
 
     void on_new_peer_event(uint32_t id) override {
-        std::cout << "[Node] #" << this->id << " on_new_peer_event " << std::endl;
+        logger << "[Node] #" << this->id << " on_new_peer_event " << std::endl;
         ev_ch->send(randpa_event { ::on_new_peer_event { id } });
     }
 
     void on_accepted_block_event(pair<block_id_type, public_key_type> block) override {
-        std::cout << "[Node] #" << this->id << " on_accepted_block_event " << std::endl;
+        logger << "[Node] #" << id << " on_accepted_block_event " << std::endl;
         ev_ch->send(randpa_event { ::on_accepted_block_event { block.first, db.fetch_prev_block_id(block.first),
                                                                 block.second, get_active_bp_keys()
                                                                 } });
+    }
+
+    void on_irreversible_block_event(const block_id_type& block) override {
+        logger << "[Node] #" << id << " on_irreversible_event " << std::endl;
+        ev_ch->send(randpa_event { ::on_irreversible_event { block } });
+    }
+
+    void restart() override {
+        logger << "[Node] #" << id << " restarted " << std::endl;
+        init();
+        randpa_impl->start(copy_fork_db());
+        auto runner = get_runner();
+        auto from = id;
+        for (uint32_t to = 0; to < runner->get_instances(); to++) {
+            int delay = runner->get_delay_matrix()[from][to];
+            if (from != to && delay != -1) {
+                on_new_peer_event(to);
+            }
+        }
+    }
+
+    randpa& get_randpa() const {
+        return *randpa_impl;
     }
 
 private:
@@ -116,8 +121,21 @@ private:
             .set_event_channel(ev_ch)
             .set_in_net_channel(in_net_ch)
             .set_out_net_channel(out_net_ch)
-            .set_finality_channel(finality_ch)
-            .set_signature_provider(make_key_signature_provider(private_key), private_key.get_public_key());
+            .set_finality_channel(finality_ch);
+        if (type == node_type::BP) {
+            logger << "[Node] #" << id << ": setting explicit signature provider for BP; "
+                << private_key.get_public_key() << std::endl;
+            randpa_impl->set_type_block_producer();
+            randpa_impl->set_signature_providers({ make_key_signature_provider(private_key) },
+                                                 { private_key.get_public_key() }
+            );
+        }
+    }
+
+    static signature_provider_type make_key_signature_provider(const private_key_type& key) {
+        return [key](const digest_type& digest) {
+            return key.sign(digest);
+        };
     }
 
     net_channel_ptr in_net_ch;
@@ -127,4 +145,3 @@ private:
 
     randpa_ptr randpa_impl;
 };
-

@@ -275,11 +275,11 @@ BOOST_FIXTURE_TEST_CASE(test_symbol, TESTER) try {
    }
 
    {
-      symbol sys(4, CORE_SYMBOL_NAME);
-      BOOST_REQUIRE_EQUAL(::eosio::chain::string_to_symbol_c(4, CORE_SYMBOL_NAME), sys.value());
-      BOOST_REQUIRE_EQUAL("4," CORE_SYMBOL_NAME, sys.to_string());
-      BOOST_REQUIRE_EQUAL(CORE_SYMBOL_NAME, sys.name());
-      BOOST_REQUIRE_EQUAL(4, sys.decimals());
+      symbol sym(4, CORE_SYMBOL_NAME);
+      BOOST_REQUIRE_EQUAL(::eosio::chain::string_to_symbol_c(4, CORE_SYMBOL_NAME), sym.value());
+      BOOST_REQUIRE_EQUAL("4," CORE_SYMBOL_NAME, sym.to_string());
+      BOOST_REQUIRE_EQUAL(CORE_SYMBOL_NAME, sym.name());
+      BOOST_REQUIRE_EQUAL(4, sym.decimals());
    }
 
    // default is ("4," CORE_SYMBOL_NAME)

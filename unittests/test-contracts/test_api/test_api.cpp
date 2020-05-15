@@ -5,17 +5,17 @@
 #include <eosiolib/eosio.hpp>
 #include <eosiolib/transaction.hpp>
 
-#include "test_api.hpp"
+#include <test_api.hpp>
 
-#include "test_action.cpp"
-#include "test_chain.cpp"
-#include "test_checktime.cpp"
-#include "test_crypto.cpp"
-#include "test_datastream.cpp"
-#include "test_permission.cpp"
-#include "test_print.cpp"
-#include "test_transaction.cpp"
-#include "test_types.cpp"
+#include <test_action.cpp>
+#include <test_chain.cpp>
+#include <test_checktime.cpp>
+#include <test_crypto.cpp>
+#include <test_datastream.cpp>
+#include <test_permission.cpp>
+#include <test_print.cpp>
+#include <test_transaction.cpp>
+#include <test_types.cpp>
 
 name global_receiver;
 
@@ -41,7 +41,8 @@ extern "C" {
       }
       WASM_TEST_HANDLER( test_action, assert_true_cf );
 
-      if ( action != WASM_TEST_ACTION("test_transaction", "stateful_api") && action != WASM_TEST_ACTION("test_transaction", "context_free_api") )
+      if ( action != WASM_TEST_ACTION("test_transaction", "stateful_api") &&
+           action != WASM_TEST_ACTION("test_transaction", "context_free_api") )
          require_auth(code);
 
       //test_types
@@ -64,6 +65,12 @@ extern "C" {
       WASM_TEST_HANDLER   ( test_action, test_publication_time      );
       WASM_TEST_HANDLER   ( test_action, test_assert_code           );
       WASM_TEST_HANDLER_EX( test_action, test_ram_billing_in_notify );
+      WASM_TEST_HANDLER_EX( test_action, test_action_ordinal1       );
+      WASM_TEST_HANDLER_EX( test_action, test_action_ordinal2       );
+      WASM_TEST_HANDLER_EX( test_action, test_action_ordinal3       );
+      WASM_TEST_HANDLER_EX( test_action, test_action_ordinal4       );
+      WASM_TEST_HANDLER_EX( test_action, test_action_ordinal_foo    );
+      WASM_TEST_HANDLER_EX( test_action, test_action_ordinal_bar    );
 
       // test named actions
       // We enforce action name matches action data type name, so name mangling will not work for these tests.

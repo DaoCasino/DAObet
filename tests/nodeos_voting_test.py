@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from testUtils import Utils
-import testUtils
 from Cluster import Cluster
 from WalletMgr import WalletMgr
 from Node import Node
@@ -141,10 +140,8 @@ def verifyProductionRounds(trans, node, prodsActive, rounds):
 Print=Utils.Print
 errorExit=Utils.errorExit
 
-from core_symbol import CORE_SYMBOL
-
 args = TestHelper.parse_args({"--prod-count","--dump-error-details","--keep-logs","-v","--leave-running","--clean-run",
-                              "--p2p-plugin","--wallet-port"})
+                              "--wallet-port"})
 Utils.Debug=args.v
 totalNodes=4
 cluster=Cluster(walletd=True)
@@ -153,7 +150,6 @@ keepLogs=args.keep_logs
 dontKill=args.leave_running
 prodCount=args.prod_count
 killAll=args.clean_run
-p2pPlugin=args.p2p_plugin
 walletPort=args.wallet_port
 
 walletMgr=WalletMgr(True, port=walletPort)
@@ -161,8 +157,7 @@ testSuccessful=False
 killEosInstances=not dontKill
 killWallet=not dontKill
 
-WalletdName=Utils.EosWalletName
-ClientName="cleos"
+WalletdName=Utils.WalletName
 
 try:
     TestHelper.printSystemInfo("BEGIN")
@@ -171,7 +166,7 @@ try:
     cluster.killall(allInstances=killAll)
     cluster.cleanup()
     Print("Stand up cluster")
-    if cluster.launch(prodCount=prodCount, onlyBios=False, pnodes=totalNodes, totalNodes=totalNodes, totalProducers=totalNodes*21, p2pPlugin=p2pPlugin, useBiosBootFile=False) is False:
+    if cluster.launch(prodCount=prodCount, onlyBios=False, pnodes=totalNodes, totalNodes=totalNodes, totalProducers=totalNodes*21, useBiosBootFile=False) is False:
         Utils.cmdError("launcher")
         Utils.errorExit("Failed to stand up eos cluster.")
 
@@ -213,7 +208,7 @@ try:
     for account in accounts:
         Print("Create new account %s via %s" % (account.name, cluster.eosioAccount.name))
         trans=node.createInitializeAccount(account, cluster.eosioAccount, stakedDeposit=0, waitForTransBlock=False, stakeNet=1000, stakeCPU=1000, buyRAM=1000, exitOnError=True)
-        transferAmount="100000000.0000 {0}".format(CORE_SYMBOL)
+        transferAmount="100000000.0000 {0}".format(Utils.CoreSym)
         Print("Transfer funds %s from account %s to %s" % (transferAmount, cluster.eosioAccount.name, account.name))
         node.transferFunds(cluster.eosioAccount, account, transferAmount, "test transfer")
         trans=node.delegatebw(account, 20000000.0000, 20000000.0000, waitForTransBlock=True, exitOnError=True)

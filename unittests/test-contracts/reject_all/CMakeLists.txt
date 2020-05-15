@@ -1,0 +1,7 @@
+if( EOSIO_COMPILE_TEST_CONTRACTS )
+   add_contract_with_abi( reject_all reject_all reject_all.cpp )
+   target_include_directories( reject_all PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} )
+   install( TARGETS reject_all DESTINATION ${CMAKE_CURRENT_SOURCE_DIR} )
+else()
+   configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/reject_all.wasm ${CMAKE_CURRENT_BINARY_DIR}/reject_all.wasm COPYONLY )
+endif()

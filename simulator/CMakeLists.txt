@@ -11,6 +11,7 @@ ExternalProject_Add(gtest
         URL https://github.com/google/googletest/archive/release-1.8.1.zip
         PREFIX ${CMAKE_CURRENT_BINARY_DIR}/gtest
         INSTALL_COMMAND ""
+        CMAKE_ARGS -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
         BUILD_BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/gtest/src/gtest-build/googlemock/gtest/libgtest.a")
 ExternalProject_Get_Property(gtest source_dir binary_dir)
 

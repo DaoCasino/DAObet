@@ -1,11 +1,9 @@
-import testUtils
 import p2p_test_peers
+
 import random
 import time
 import copy
 import threading
-
-from core_symbol import CORE_SYMBOL
 
 class StressNetwork:
     speeds=[1,5,10,30,60,100,500]
@@ -52,7 +50,7 @@ class StressNetwork:
         print("issue currency0000 into %s" % (acc1.name))
         contract="eosio"
         action="issue"
-        data="{\"to\":\"" + acc1.name + "\",\"quantity\":\"1000000.0000 "+CORE_SYMBOL+"\"}"
+        data="{\"to\":\"" + acc1.name + "\",\"quantity\":\"1000000.0000 "+Utils.CoreSym+"\"}"
         opts="--permission eosio@active"
         tr=node.pushMessage(contract, action, data, opts)
         trid = node.getTransId(tr[1])

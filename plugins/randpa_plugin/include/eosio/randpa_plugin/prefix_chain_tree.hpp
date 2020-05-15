@@ -1,21 +1,13 @@
 #pragma once
 
 #include "types.hpp"
-#include <memory>
-#include <vector>
+
 #include <map>
+#include <memory>
 #include <set>
-#include <queue>
+#include <vector>
 
 namespace randpa_finality {
-
-using std::vector;
-using std::shared_ptr;
-using std::weak_ptr;
-using std::pair;
-using std::make_pair;
-using std::set;
-using std::map;
 
 template <typename ConfType>
 class prefix_node {
@@ -23,21 +15,23 @@ public:
     using conf_type = ConfType;
 private:
     using node_type = prefix_node<conf_type>;
-    using node_ptr = shared_ptr<node_type>;
+    using node_ptr = std::shared_ptr<node_type>;
 
 public:
     block_id_type block_id;
-    std::map<public_key_type, shared_ptr<conf_type>> confirmation_data;
-    vector<node_ptr> adjacent_nodes;
-    weak_ptr<node_type> parent;
+    std::map<public_key_type, std::shared_ptr<conf_type>> confirmation_data;
+    std::vector<node_ptr> adjacent_nodes;
+    std::weak_ptr<node_type> parent;
     public_key_type creator_key;
-    set<public_key_type> active_bp_keys;
+    std::set<public_key_type> active_bp_keys;
+
+    //
 
     size_t confirmation_number() const {
         return confirmation_data.size();
     }
 
-    node_ptr get_matching_node(block_id_type block_id) {
+    node_ptr get_matching_node(block_id_type block_id) const {
         for (const auto& node : adjacent_nodes) {
             if (node->block_id == block_id) {
                 return node;
@@ -46,56 +40,80 @@ public:
         return nullptr;
     }
 
-    bool has_confirmation(const public_key_type& pub_key ) {
+    bool has_confirmation(const public_key_type& pub_key) const {
         return confirmation_data.find(pub_key) != confirmation_data.end();
     }
 };
 
+
 struct chain_type {
     block_id_type base_block;
-    vector<block_id_type> blocks;
+    block_ids_type blocks;
 };
+
 
 class NodeNotFoundError : public std::exception {};
 
+
 template <typename NodeType>
 class prefix_chain_tree {
-private:
-    using node_ptr = shared_ptr<NodeType>;
-    using node_weak_ptr = weak_ptr<NodeType>;
-    using conf_ptr = shared_ptr<typename NodeType::conf_type>;
+    using node_ptr = std::shared_ptr<NodeType>;
+    using node_unique_ptr = std::unique_ptr<NodeType>;
+    using node_weak_ptr = std::weak_ptr<NodeType>;
+    using conf_ptr = std::shared_ptr<typename NodeType::conf_type>;
 
     struct node_info {
         node_ptr node;
         size_t height;
     };
 
+    std::map<public_key_type, node_weak_ptr> last_inserted_block;
+    std::map<block_id_type, node_weak_ptr> block_index;
+    // lifetime(node) < lifetime(block_index) => destroy the node first
+    node_ptr root;
+    node_weak_ptr head_block;
+
 public:
-    explicit prefix_chain_tree(node_ptr&& root_): root(std::move(root_)) {}
+    explicit prefix_chain_tree(node_unique_ptr&& root_) {
+        // some dummy code for root to actually be erased from block_index
+        NodeType *raw_ptr = new NodeType(*root_);
+        root = std::shared_ptr<NodeType>(raw_ptr, [this](NodeType *ptr) {
+            this->block_index.erase(ptr->block_id);
+            delete ptr;
+        });
+        block_index[root->block_id] = node_weak_ptr(root);
+    }
     prefix_chain_tree() = delete;
     prefix_chain_tree(const prefix_chain_tree&) = delete;
 
-    auto find(const block_id_type& block_id) const {
-        return find_node(block_id, root);
+    node_ptr find(const block_id_type& block_id) const {
+        auto itr = block_index.find(block_id);
+        return itr != block_index.end() ? itr->second.lock() : nullptr;
     }
 
-    node_ptr add_confirmations(const chain_type& chain, const public_key_type& sender_key, const conf_ptr& conf) {
+    node_ptr add_confirmations(const chain_type& chain,
+                               const public_key_type& sender_key,
+                               const conf_ptr& conf) {
         node_ptr node = nullptr;
-        vector<block_id_type> blocks;
+        block_ids_type blocks;
         std::tie(node, blocks) = get_tree_node(chain);
         if (!node) {
             return nullptr;
         }
         return _add_confirmations(node, blocks, sender_key, conf);
+
+
     }
 
     void remove_confirmations() {
         _remove_confirmations(root);
     }
 
-    void insert(const chain_type& chain, const public_key_type& creator_key, const set<public_key_type>& active_bp_keys) {
+    void insert(const chain_type& chain,
+                const public_key_type& creator_key,
+                const std::set<public_key_type>& active_bp_keys) {
         node_ptr node = nullptr;
-        vector<block_id_type> blocks;
+        block_ids_type blocks;
         std::tie(node, blocks) = get_tree_node(chain);
 
         if (!node) {
@@ -105,28 +123,28 @@ public:
         insert_blocks(node, blocks, creator_key, active_bp_keys);
     }
 
-    auto get_final_chain_head(size_t confirmation_number) const {
+    node_ptr get_final_chain_head(size_t confirmation_number) const {
         auto head = get_chain_head(root, confirmation_number, 0).node;
         return head != root ? head : nullptr;
     }
 
-    auto get_root() const {
+    node_ptr get_root() const {
         return root;
     }
 
-    auto set_root(const node_ptr& new_root) {
+    void set_root(const node_ptr& new_root) {
         root = new_root;
         root->parent.reset();
     }
 
-    auto get_head() const {
+    node_ptr get_head() const {
         if (!head_block.lock()) {
             return root;
         }
         return head_block.lock();
     }
 
-    node_ptr get_last_inserted_block(const public_key_type& pub_key) {
+    node_ptr get_last_inserted_block(const public_key_type& pub_key) const {
         auto iterator = last_inserted_block.find(pub_key);
         if (iterator != last_inserted_block.end()) {
             auto node = iterator->second;
@@ -141,7 +159,7 @@ public:
         chain_type chain { root->block_id, {} };
         while (last_node != root) {
             chain.blocks.push_back(last_node->block_id);
-            FC_ASSERT(!last_node->parent.expired(), "parent should be exists");
+            FC_ASSERT(!last_node->parent.expired(), "parent expired");
             last_node = last_node->parent.lock();
         }
         std::reverse(chain.blocks.begin(), chain.blocks.end());
@@ -150,26 +168,22 @@ public:
     }
 
 private:
-    node_ptr root;
-    map<public_key_type, node_weak_ptr> last_inserted_block;
-    node_weak_ptr head_block;
-
-    pair<node_ptr, vector<block_id_type> > get_tree_node(const chain_type& chain) {
+    std::pair<node_ptr, block_ids_type> get_tree_node(const chain_type& chain) const {
         auto node = find(chain.base_block);
         const auto& blocks = chain.blocks;
 
         if (node) {
-            return {node, std::move(chain.blocks)};
+            return { node, std::move(chain.blocks) };
         }
 
         auto block_itr = std::find_if(blocks.begin(), blocks.end(), [&](const auto& block) {
-            return (bool) find(block);
+            return static_cast<bool>(find(block));
         });
 
         if (block_itr != blocks.end()) {
-            return { find(*block_itr), vector<block_id_type>(block_itr + 1, blocks.end()) };
+            return { find(*block_itr), block_ids_type(block_itr + 1, blocks.end()) };
         }
-        return {nullptr, {} };
+        return { nullptr, {} };
     }
 
     node_info get_chain_head(const node_ptr& node, size_t confirmation_number, size_t depth) const {
@@ -186,36 +200,26 @@ private:
         return result;
     }
 
-    node_ptr find_node(const block_id_type& block_id, node_ptr node) const {
-        std::queue<node_ptr> queue {{ node }};
-
-        while (queue.size()) {
-            auto top_node = queue.front();
-            queue.pop();
-
-            if (top_node->block_id == block_id) {
-                return top_node;
-            }
-
-            for (auto&& adj_node: top_node->adjacent_nodes) {
-                queue.push(adj_node);
-            }
-        }
-
-        return nullptr;
-    }
-
-    void insert_blocks(node_ptr node, const vector<block_id_type>& blocks, const public_key_type& creator_key,
-            const set<public_key_type>& active_bp_keys) {
+    void insert_blocks(node_ptr node,
+                       const block_ids_type& blocks,
+                       const public_key_type& creator_key,
+                       const std::set<public_key_type>& active_bp_keys) {
         for (const auto& block_id : blocks) {
             auto next_node = node->get_matching_node(block_id);
             if (!next_node) {
-                next_node = std::make_shared<NodeType>(NodeType{block_id,
-                                                                      {},
-                                                                      {},
-                                                                      node,
-                                                                      creator_key,
-                                                                      active_bp_keys});
+                next_node = std::shared_ptr<NodeType>(
+                    new NodeType{block_id,
+                                 {},
+                                 {},
+                                 node,
+                                 creator_key,
+                                 active_bp_keys},
+                    [this](NodeType *node) {
+                        this->block_index.erase(node->block_id);
+                        delete node;
+                    }
+                );
+                block_index[block_id] = std::weak_ptr<NodeType>(next_node);
                 node->adjacent_nodes.push_back(next_node);
             }
             node = next_node;
@@ -227,8 +231,10 @@ private:
         }
     }
 
-    node_ptr _add_confirmations(node_ptr node, const vector<block_id_type>& blocks, const public_key_type& sender_key,
-                           const conf_ptr& conf) {
+    node_ptr _add_confirmations(node_ptr node,
+                                const block_ids_type& blocks,
+                                const public_key_type& sender_key,
+                                const conf_ptr& conf) {
         auto max_conf_node = node;
         node->confirmation_data[sender_key] = conf;
 

@@ -2,7 +2,7 @@
  *  @file
  *  @copyright defined in eos/LICENSE
  */
-#include "proxy.hpp"
+#include <proxy.hpp>
 #include <eosio/transaction.hpp>
 
 using namespace eosio;
@@ -59,6 +59,7 @@ void proxy::on_error( uint128_t sender_id, eosio::ignore<std::vector<char>> ) {
    get_datastream() >> packed_trx_size;
    transaction trx;
    get_datastream() >> trx;
+   trx.transaction_extensions.clear();
 
    trx.delay_sec = cfg.delay;
    trx.send( id, get_self() );

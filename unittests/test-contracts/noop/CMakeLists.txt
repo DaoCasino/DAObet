@@ -1,5 +1,7 @@
 if( EOSIO_COMPILE_TEST_CONTRACTS )
-   add_contract( noop noop noop.cpp )
+   add_contract_with_abi( noop noop noop.cpp )
+   target_include_directories( noop PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} )
+   install( TARGETS noop DESTINATION ${CMAKE_CURRENT_SOURCE_DIR} )
 else()
    configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/noop.wasm ${CMAKE_CURRENT_BINARY_DIR}/noop.wasm COPYONLY )
    configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/noop.abi  ${CMAKE_CURRENT_BINARY_DIR}/noop.abi  COPYONLY )

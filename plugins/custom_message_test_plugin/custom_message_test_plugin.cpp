@@ -45,7 +45,7 @@ static appbase::abstract_plugin& _custom_message_test_plugin = app().register_pl
           try { \
              if (body.empty()) body = "{}"; \
              INVOKE \
-             cb(http_response_code, fc::json::to_string(result)); \
+             cb(http_response_code, fc::json::to_string(result, fc::time_point::maximum())); \
           } catch (...) { \
              http_plugin::handle_exception(#api_name, #call_name, body, cb); \
           } \
@@ -65,56 +65,18 @@ static appbase::abstract_plugin& _custom_message_test_plugin = app().register_pl
 
 struct custom_message_test_plugin_impl {
 
-   void bcast_struct_message(const struct_message & msg) {
-      app().get_plugin<bnet_plugin>().bcast(struct_message_type, msg);
-   }
-
-   void bcast_string_message(const string_message & msg) {
-      app().get_plugin<bnet_plugin>().bcast(string_message_type, msg);
-   }
-
-   void bcast_default_message(uint32_t type) {
-      app().get_plugin<bnet_plugin>().bcast(type, std::string("default msg bcast"));
-   }
-
    void send_struct_message(uint32_t ses_id, const struct_message & msg) {
-      app().get_plugin<bnet_plugin>().send(ses_id, struct_message_type, msg);
+      app().get_plugin<net_plugin>().send(ses_id, struct_message_type, msg);
    }
 
    void send_string_message(uint32_t ses_id, const string_message & msg) {
-      app().get_plugin<bnet_plugin>().send(ses_id, string_message_type, msg);
+      app().get_plugin<net_plugin>().send(ses_id, string_message_type, msg);
    }
 
    void send_default_message(uint32_t ses_id, uint32_t type) {
-      app().get_plugin<bnet_plugin>().send(ses_id, type, std::string("default msg send"));
+      app().get_plugin<net_plugin>().send(ses_id, type, std::string("default msg send"));
    }
 
-   void bcast(uint32_t type, const variant& var) {
-      try {
-         switch (type) {
-            case struct_message_type:
-               bcast_struct_message(var.as<struct_message>());
-               break;
-
-            case string_message_type:
-               bcast_string_message(var.as<string_message>());
-               break;
-
-            default:
-               bcast_default_message(type);
-               break;
-         }
-
-         wlog("bcast custom message, type: ${type}, message: ${msg}",
-            ("type", type)
-            ("msg", fc::json::to_string(var))
-         );
-      }
-      catch (std::exception ex) {
-         elog("error on bcast, e: ${e}", ("e", ex.what()));
-      }
-   }
-   
    void send(uint32_t session_id, uint32_t type, const variant& var) {
       try {
          switch (type) {
@@ -133,7 +95,7 @@ struct custom_message_test_plugin_impl {
 
          wlog("send custom message, type: ${type}, message: ${msg}, to: ${to}",
             ("type", type)
-            ("msg", fc::json::to_string(var))
+            ("msg", fc::json::to_string(var, fc::time_point::maximum()))
             ("to", session_id)
          );
       }
@@ -143,7 +105,7 @@ struct custom_message_test_plugin_impl {
    }
 
    void subscribe() {
-      app().get_plugin<bnet_plugin>().subscribe<struct_message>(struct_message_type,
+      app().get_plugin<net_plugin>().subscribe<struct_message>(struct_message_type,
       [](uint32_t ses_id, const struct_message & msg) {
          wlog("received custom message, session_id: ${ses_id}, type: ${type}, thread: ${thread}",
             ("ses_id", ses_id)
@@ -152,7 +114,7 @@ struct custom_message_test_plugin_impl {
          );
       });
 
-      app().get_plugin<bnet_plugin>().subscribe<string_message>(string_message_type,
+      app().get_plugin<net_plugin>().subscribe<string_message>(string_message_type,
       [](uint32_t ses_id, const string_message & msg) {
          wlog("received custom message, session_id: ${ses_id}, type: ${type}, thread: ${thread}",
             ("ses_id", ses_id)
@@ -184,7 +146,6 @@ void custom_message_test_plugin::plugin_startup() {
    my->subscribe();
 
    app().get_plugin<http_plugin>().add_api({
-      CALL(custom_message_test, my, bcast, INVOKE_V_R_R(my, bcast, uint32_t, variant), 200),
       CALL(custom_message_test, my, send, INVOKE_V_R_R_R(my, send, uint32_t, uint32_t, variant), 200),
    });
 

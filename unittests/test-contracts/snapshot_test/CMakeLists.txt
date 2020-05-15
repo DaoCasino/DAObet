@@ -1,5 +1,7 @@
 if( EOSIO_COMPILE_TEST_CONTRACTS )
-   add_contract( snapshot_test snapshot_test snapshot_test.cpp )
+   add_contract_with_abi( snapshot_test snapshot_test snapshot_test.cpp )
+   target_include_directories( snapshot_test PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} )
+   install( TARGETS snapshot_test DESTINATION ${CMAKE_CURRENT_SOURCE_DIR} )
 else()
    configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/snapshot_test.wasm ${CMAKE_CURRENT_BINARY_DIR}/snapshot_test.wasm COPYONLY )
    configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/snapshot_test.abi  ${CMAKE_CURRENT_BINARY_DIR}/snapshot_test.abi  COPYONLY )

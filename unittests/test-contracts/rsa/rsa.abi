@@ -1,0 +1,35 @@
+{
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT ",
+    "version": "eosio::abi/1.1",
+    "types": [],
+    "structs": [
+        {
+            "name": "verify",
+            "base": "",
+            "fields": [
+                {
+                    "name": "digest",
+                    "type": "checksum256"
+                },
+                {
+                    "name": "sig",
+                    "type": "string"
+                },
+                {
+                    "name": "pubkey",
+                    "type": "string"
+                }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "name": "verify",
+            "type": "verify",
+            "ricardian_contract": ""
+        }
+    ],
+    "tables": [],
+    "ricardian_clauses": [],
+    "variants": []
+}

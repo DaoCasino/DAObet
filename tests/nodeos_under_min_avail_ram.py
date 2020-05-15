@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 
-from core_symbol import CORE_SYMBOL
 from Cluster import Cluster
 from WalletMgr import WalletMgr
 from Node import Node
 from TestHelper import TestHelper
 from testUtils import Utils
-import testUtils
-import time
 
+import time
 import decimal
 import math
 import re
@@ -70,8 +68,7 @@ testSuccessful=False
 killEosInstances=not dontKill
 killWallet=not dontKill
 
-WalletdName=Utils.EosWalletName
-ClientName="cleos"
+WalletdName=Utils.WalletName
 
 try:
     TestHelper.printSystemInfo("BEGIN")
@@ -84,8 +81,8 @@ try:
     minRAMValue=1002
     maxRAMFlag="--chain-state-db-size-mb"
     maxRAMValue=1010
-    extraNodeosArgs=" %s %d %s %d " % (minRAMFlag, minRAMValue, maxRAMFlag, maxRAMValue)
-    if cluster.launch(onlyBios=False, pnodes=totalNodes, totalNodes=totalNodes, totalProducers=totalNodes, extraNodeosArgs=extraNodeosArgs, useBiosBootFile=False) is False:
+    extraNodeArgs=" %s %d %s %d  --http-max-response-time-ms 990000 " % (minRAMFlag, minRAMValue, maxRAMFlag, maxRAMValue)
+    if cluster.launch(onlyBios=False, pnodes=totalNodes, totalNodes=totalNodes, totalProducers=totalNodes, extraNodeArgs=extraNodeArgs, useBiosBootFile=False) is False:
         Utils.cmdError("launcher")
         errorExit("Failed to stand up eos cluster.")
 
@@ -120,7 +117,7 @@ try:
     for account in accounts:
         Print("Create new account %s via %s" % (account.name, cluster.eosioAccount.name))
         trans=nodes[0].createInitializeAccount(account, cluster.eosioAccount, stakedDeposit=500000, waitForTransBlock=False, stakeNet=50000, stakeCPU=50000, buyRAM=50000, exitOnError=True)
-        transferAmount="70000000.0000 {0}".format(CORE_SYMBOL)
+        transferAmount="70000000.0000 {0}".format(Utils.CoreSym)
         Print("Transfer funds %s from account %s to %s" % (transferAmount, cluster.eosioAccount.name, account.name))
         nodes[0].transferFunds(cluster.eosioAccount, account, transferAmount, "test transfer")
         trans=nodes[0].delegatebw(account, 1000000.0000, 68000000.0000, waitForTransBlock=True, exitOnError=True)
@@ -130,7 +127,7 @@ try:
     walletMgr.importKey(contractAccount, testWallet)
     Print("Create new account %s via %s" % (contractAccount.name, cluster.eosioAccount.name))
     trans=nodes[0].createInitializeAccount(contractAccount, cluster.eosioAccount, stakedDeposit=500000, waitForTransBlock=False, stakeNet=50000, stakeCPU=50000, buyRAM=50000, exitOnError=True)
-    transferAmount="90000000.0000 {0}".format(CORE_SYMBOL)
+    transferAmount="90000000.0000 {0}".format(Utils.CoreSym)
     Print("Transfer funds %s from account %s to %s" % (transferAmount, cluster.eosioAccount.name, contractAccount.name))
     nodes[0].transferFunds(cluster.eosioAccount, contractAccount, transferAmount, "test transfer")
     trans=nodes[0].delegatebw(contractAccount, 1000000.0000, 88000000.0000, waitForTransBlock=True, exitOnError=True)
@@ -141,7 +138,7 @@ try:
     Print("Publish contract")
     trans=nodes[0].publishContract(contractAccount.name, contractDir, wasmFile, abiFile, waitForTransBlock=True)
     if trans is None:
-        Utils.cmdError("%s set contract %s" % (ClientName, contractAccount.name))
+        Utils.cmdError("%s set contract %s" % (CLI_BINARY_NAME, contractAccount.name))
         errorExit("Failed to publish contract.")
 
     contract=contractAccount.name
@@ -167,11 +164,13 @@ try:
                 if trans is None or not trans[0]:
                     timeOutCount+=1
                     if timeOutCount>=3:
-                       Print("Failed to push create action to eosio contract for %d consecutive times, looks like nodeos already exited." % (timeOutCount))
-                       keepProcessing=False
-                       break
-                    Print("Failed to push create action to eosio contract. sleep for 60 seconds")
-                    time.sleep(60)
+                        Print("Failed to push create action to eosio contract for %d consecutive times, looks like node already exited." % (timeOutCount))
+                        keepProcessing=False
+                        break
+
+                    Print("Failed to push create action to eosio contract. sleep for 5 seconds")
+                    count-=1 # failed attempt shouldn't be counted
+                    time.sleep(5)
                 else:
                     timeOutCount=0
                 time.sleep(1)
@@ -182,25 +181,27 @@ try:
     #spread the actions to all accounts, to use each accounts tps bandwidth
     fromIndexStart=fromIndex+1 if fromIndex+1<namedAccounts.numAccounts else 0
 
-    if count < 5 or count > 15:
-        strMsg="little" if count < 15 else "much"
+    # min and max are subjective, just assigned to make sure that many small changes in nodeos don't 
+    # result in the test not correctly validating behavior
+    if count < 5 or count > 20:
+        strMsg="little" if count < 20 else "much"
         Utils.cmdError("Was able to send %d store actions which was too %s" % (count, strMsg))
         errorExit("Incorrect number of store actions sent")
 
     # Make sure all the nodes are shutdown (may take a little while for this to happen, so making multiple passes)
-    allDone=False
     count=0
-    while not allDone:
+    while True:
         allDone=True
         for node in nodes:
             if node.verifyAlive():
                 allDone=False
-        if not allDone:
-            time.sleep(5)
+        if allDone:
+            break
         count+=1
-        if count>5:
+        if count>12:
             Utils.cmdError("All Nodes should have died")
             errorExit("Failure - All Nodes should have died")
+        time.sleep(5)
 
     Print("relaunch nodes with new capacity")
     addOrSwapFlags={}
@@ -284,7 +285,6 @@ try:
     addOrSwapFlags={}
 
     time.sleep(10)
-    allDone=True
     for node in nodes:
         if not node.verifyAlive():
             Utils.cmdError("All Nodes should be alive")
@@ -321,7 +321,6 @@ try:
 
     time.sleep(10)
     Print("Check nodes are alive")
-    allDone=True
     for node in nodes:
         if not node.verifyAlive():
             Utils.cmdError("All Nodes should be alive")

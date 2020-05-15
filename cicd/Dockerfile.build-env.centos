@@ -1,0 +1,20 @@
+FROM centos:7 AS node-build-env
+ARG project
+LABEL \
+  author="Andrey Levkin <alevkin@gmail.com>" \
+  maintainer="Andrew Petelin <adrianopol@gmail.com>" \
+  description="Base image for building ${project} on CentOS"
+# ${project} subdir is important for project name detection in build scripts
+COPY ./scripts /work/${project}/scripts
+RUN \
+  yum -y update && \
+  yum -y --enablerepo=extras install centos-release-scl && \
+  yum -y install epel-release && \
+  yum -y --enablerepo=epel update && \
+  yum -y install git curl sudo ccache gettext rpm-build && \
+  env INSTALL_PREFIX=/root/ bash -x /work/${project}/scripts/build.sh --deps-only --local-clang --install-mongo --enable-mongo && \
+  yum clean all && \
+  rm -rf \
+    /root/src \
+    /var/cache/* \
+    /work/

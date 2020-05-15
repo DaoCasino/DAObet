@@ -1,5 +1,7 @@
 if( EOSIO_COMPILE_TEST_CONTRACTS )
-   add_contract( payloadless payloadless payloadless.cpp )
+   add_contract_with_abi( payloadless payloadless payloadless.cpp )
+   target_include_directories( payloadless PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} )
+   install( TARGETS payloadless DESTINATION ${CMAKE_CURRENT_SOURCE_DIR} )
 else()
    configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/payloadless.wasm ${CMAKE_CURRENT_BINARY_DIR}/payloadless.wasm COPYONLY )
    configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/payloadless.abi  ${CMAKE_CURRENT_BINARY_DIR}/payloadless.abi  COPYONLY )

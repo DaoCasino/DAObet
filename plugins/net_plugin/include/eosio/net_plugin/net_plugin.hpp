@@ -17,7 +17,10 @@ namespace eosio {
       handshake_message last_handshake;
    };
 
+   ///@{
+   /// HAYA: [cyb-284] use net_plugin in randpa
    using subs_cb = std::function<void (uint32_t, const custom_message&)>;
+   ///@}
 
    class net_plugin : public appbase::plugin<net_plugin>
    {
@@ -40,10 +43,16 @@ namespace eosio {
         optional<connection_status>  status( const string& endpoint )const;
         vector<connection_status>    connections()const;
 
+        ///@{
+        /// HAYA: [cyb-284] use net_plugin in randpa
         template <typename T>
         void subscribe(uint32_t msg_type, std::function<void(uint32_t peer_num, const T& msg)>&& cb) {
            subscribe(msg_type, [cb = std::move(cb)](uint32_t peer_num, const custom_message& raw_msg) {
-             cb(peer_num, fc::raw::unpack<T>(raw_msg.data));
+            try {
+              cb(peer_num, fc::raw::unpack<T>(raw_msg.data));
+            } catch (const fc::exception& e) {
+              elog("Deserialization error, reason: ${e}", ("e", e.what()));
+            }
            });
         }
         void subscribe(uint32_t msg_type, subs_cb&&);
@@ -53,12 +62,15 @@ namespace eosio {
           send(peer_num, custom_message { msg_type, fc::raw::pack(msg) });
         }
         void send(uint32_t peer_num, const custom_message&);
+        ///@}
 
         size_t num_peers() const;
 
-
+      ///@{
+      /// HAYA: [cyb-284] use net_plugin in randpa
       public:
         using new_peer = channel_decl<struct net_new_peer_tag, uint32_t>;
+      ///@}
 
       private:
         std::shared_ptr<class net_plugin_impl> my;

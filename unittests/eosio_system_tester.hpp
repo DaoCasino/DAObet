@@ -18,11 +18,11 @@ using namespace fc;
 using mvo = fc::mutable_variant_object;
 
 #ifndef TESTER
-#ifdef NON_VALIDATING_TEST
-#define TESTER tester
-#else
-#define TESTER validating_tester
-#endif
+# ifdef NON_VALIDATING_TEST
+#  define TESTER tester
+# else
+#  define TESTER validating_tester
+# endif
 #endif
 
 namespace eosio_system {
@@ -246,7 +246,7 @@ public:
                           ("receiver", to)
                           ("stake_net_quantity", net)
                           ("stake_cpu_quantity", cpu)
-                          ("transfer", 0 )
+                          ("transfer", 0)
       );
    }
 

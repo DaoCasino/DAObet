@@ -1,3 +1,5 @@
+from config_product import *
+
 import re
 import errno
 import subprocess
@@ -16,26 +18,33 @@ import traceback
 
 ###########################################################################################
 class Utils:
-    Debug=False
+    Debug = False
     FNull = open(os.devnull, 'w')
 
-    EosClientPath="programs/daobet-cli/daobet-cli"
-    MiscEosClientArgs="--no-auto-daobet-wallet"
+    CoreSym = CORE_SYMBOL
 
-    EosWalletName="daobet-wallet"
-    EosWalletPath="programs/daobet-wallet/"+ EosWalletName
+    ClientPath = os.path.join("programs/cli", CLI_BINARY_NAME)
+    MiscClientArgs = "--no-auto-"+WALLET_BINARY_NAME
 
-    EosServerName="daobet-node"
-    EosServerPath="programs/daobet-node/"+ EosServerName
+    CliName = CLI_BINARY_NAME
 
-    EosLauncherPath="programs/daobet-launcher/daobet-launcher"
-    MongoPath="mongo"
-    ShuttingDown=False
-    CheckOutputDeque=deque(maxlen=10)
+    WalletName = WALLET_BINARY_NAME
+    WalletPath = os.path.join("programs/wallet", WalletName)
 
-    EosBlockLogPath="programs/daobet-blocklog/daobet-blocklog"
+    ServerName = NODE_BINARY_NAME
+    ServerPath = os.path.join("programs/node", ServerName)
 
-    FileDivider="================================================================="
+    LauncherPath = os.path.join("programs/launcher", LAUNCHER_BINARY_NAME)
+
+    MongoPath = "mongo"
+    ShuttingDown = False
+    CheckOutputDeque = deque(maxlen=10)
+
+    BlockLogPath = os.path.join("programs/blocklog", PRODUCT_NAME+"-blocklog")
+
+    FileDivider = "================================================================="
+    DataDir = "var/lib/"
+    ConfigDir = os.path.join("etc", PRODUCT_NAME)
 
     @staticmethod
     def Print(*args, **kwargs):
@@ -66,6 +75,38 @@ class Utils:
         Utils.systemWaitTimeout=timeout
 
     @staticmethod
+    def getDateString(dt):
+        return "%d_%02d_%02d_%02d_%02d_%02d" % (
+            dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+
+    @staticmethod
+    def nodeExtensionToName(ext):
+        r"""Convert node extension (bios, 0, 1, etc) to node name. """
+        prefix="node_"
+        if ext == "bios":
+            return prefix + ext
+
+        return "node_%02d" % (ext)
+
+    @staticmethod
+    def getNodeDataDir(ext, relativeDir=None, trailingSlash=False):
+        path=os.path.join(Utils.DataDir, Utils.nodeExtensionToName(ext))
+        if relativeDir is not None:
+           path=os.path.join(path, relativeDir)
+        if trailingSlash:
+           path=os.path.join(path, "")
+        return path
+
+    @staticmethod
+    def getNodeConfigDir(ext, relativeDir=None, trailingSlash=False):
+        path=os.path.join(Utils.ConfigDir, Utils.nodeExtensionToName(ext))
+        if relativeDir is not None:
+           path=os.path.join(path, relativeDir)
+        if trailingSlash:
+           path=os.path.join(path, "")
+        return path
+
+    @staticmethod
     def getChainStrategies():
         chainSyncStrategies={}
 
@@ -85,8 +126,10 @@ class Utils:
 
     @staticmethod
     def checkOutput(cmd, ignoreError=False):
-        assert(isinstance(cmd, list))
-        popen=subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if (isinstance(cmd, list)):
+            popen=subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:
+            popen=subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
         (output,error)=popen.communicate()
         Utils.CheckOutputDeque.append((output,error,cmd))
         if popen.returncode != 0 and not ignoreError:
@@ -108,7 +151,7 @@ class Utils:
         Utils.Print(msg)
 
     @staticmethod
-    def waitForObj(lam, timeout=None):
+    def waitForObj(lam, timeout=None, sleepTime=3, reporter=None):
         if timeout is None:
             timeout=60
 
@@ -119,7 +162,6 @@ class Utils:
                 ret=lam()
                 if ret is not None:
                     return ret
-                sleepTime=3
                 if Utils.Debug:
                     Utils.Print("cmd: sleep %d seconds, remaining time: %d seconds" %
                                 (sleepTime, endTime - time.time()))
@@ -127,6 +169,8 @@ class Utils:
                     stdout.write('.')
                     stdout.flush()
                     needsNewLine=True
+                if reporter is not None:
+                    reporter()
                 time.sleep(sleepTime)
         finally:
             if needsNewLine:
@@ -135,9 +179,9 @@ class Utils:
         return None
 
     @staticmethod
-    def waitForBool(lam, timeout=None):
+    def waitForBool(lam, timeout=None, sleepTime=3, reporter=None):
         myLam = lambda: True if lam() else None
-        ret=Utils.waitForObj(myLam, timeout)
+        ret=Utils.waitForObj(myLam, timeout, sleepTime, reporter=reporter)
         return False if ret is None else ret
 
     @staticmethod
@@ -180,7 +224,8 @@ class Utils:
 
     @staticmethod
     def runCmdReturnStr(cmd, trace=False):
-        retStr=Utils.checkOutput(cmd.split())
+        cmdArr=shlex.split(cmd)
+        retStr=Utils.checkOutput(cmdArr)
         if trace: Utils.Print ("RAW > %s" % (retStr))
         return retStr
 
@@ -235,7 +280,7 @@ class Utils:
     @staticmethod
     def getBlockLog(blockLogLocation, silentErrors=False, exitOnError=False):
         assert(isinstance(blockLogLocation, str))
-        cmd="%s --blocks-dir %s --as-json-array" % (Utils.EosBlockLogPath, blockLogLocation)
+        cmd="%s --blocks-dir %s --as-json-array" % (Utils.BlockLogPath, blockLogLocation)
         if Utils.Debug: Utils.Print("cmd: %s" % (cmd))
         rtn=None
         try:

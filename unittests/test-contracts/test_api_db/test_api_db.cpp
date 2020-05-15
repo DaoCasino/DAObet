@@ -2,7 +2,7 @@
  *  @file
  *  @copyright defined in eos/LICENSE
  */
-#include "test_api_db.hpp"
+#include <test_api_db.hpp>
 
 using namespace eosio;
 

@@ -10,12 +10,15 @@
 
 using namespace eosio;
 using namespace chain;
-using std::vector;
 using namespace fc::crypto;
 using namespace randpa_finality;
 
+using std::vector;
+
 using tree_node = prefix_node<uint32_t>;
 using prefix_tree = prefix_chain_tree<tree_node>;
+
+using block_ids_type = vector<block_id_type>;
 
 static signature_provider_type make_key_signature_provider(const private_key_type& key) {
    return [key]( const digest_type& digest ) {
@@ -29,25 +32,23 @@ inline auto get_pub_key() {
 
 BOOST_AUTO_TEST_SUITE(prefix_chain_tree_tests)
 
-using blocks_type = vector<block_id_type>;
-
 BOOST_AUTO_TEST_CASE(prefix_chain_one_node) try {
     auto lib_block_id = fc::sha256("beef");
-    auto root = std::make_shared<tree_node>(tree_node{lib_block_id});
+    auto root = std::make_unique<tree_node>(tree_node{lib_block_id});
     prefix_tree tree(std::move(root));
     BOOST_REQUIRE_EQUAL(nullptr, tree.get_final_chain_head(1));
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_CASE(prefix_chain_two_nodes) try {
     auto lib_block_id = fc::sha256("beef");
-    auto root = std::make_shared<tree_node>(tree_node{lib_block_id});
+    auto root = std::make_unique<tree_node>(tree_node{lib_block_id});
     auto chain = chain_type{lib_block_id,
-                            vector<block_id_type>{fc::sha256("a")}};
+                            block_ids_type{fc::sha256("a")}};
     prefix_tree tree(std::move(root));
     tree.insert(chain, get_pub_key(), {});
     tree.add_confirmations(chain, get_pub_key(), 0);
     auto head = tree.get_final_chain_head(1);
-    BOOST_TEST(head != nullptr);
+    BOOST_TEST(head);
     BOOST_TEST(head->block_id == fc::sha256("a"));
 } FC_LOG_AND_RETHROW()
 
@@ -62,25 +63,25 @@ BOOST_AUTO_TEST_CASE(prefix_chain_test_longest) try {
     auto pub_key_1 = get_pub_key();
     auto pub_key_2 = get_pub_key();
     auto lib_block_id = fc::sha256("beef");
-    auto root = std::make_shared<tree_node>(tree_node{lib_block_id});
+    auto root = std::make_unique<tree_node>(tree_node{lib_block_id});
     prefix_tree tree(std::move(root));
     std::map<char, block_id_type> blocks;
     for (char c = 'a'; c <= 'd'; c++) {
         blocks[c] = fc::sha256(std::string{c});
     }
-    auto chain1 = chain_type { lib_block_id, blocks_type{blocks['a'], blocks['b']} };
-    auto chain2 = chain_type { blocks['a'],  blocks_type{blocks['c'], blocks['d']} };
+    auto chain1 = chain_type { lib_block_id, block_ids_type{blocks['a'], blocks['b']} };
+    auto chain2 = chain_type { blocks['a'],  block_ids_type{blocks['c'], blocks['d']} };
     tree.insert(chain1, pub_key_1, {});
     tree.add_confirmations(chain1, pub_key_1, 0);
     tree.insert(chain2, pub_key_1, {});
     tree.add_confirmations(chain2, pub_key_1, 0);
 
-    auto chain3 = chain_type {lib_block_id, vector<block_id_type>{blocks['a'], blocks['b']}};
+    auto chain3 = chain_type {lib_block_id, block_ids_type{blocks['a'], blocks['b']}};
     tree.insert(chain3, pub_key_2, {});
     tree.add_confirmations(chain3, pub_key_2, 0);
     BOOST_TEST(blocks['b'] == tree.get_final_chain_head(2)->block_id);
 
-    auto chain4 = chain_type {blocks['c'], blocks_type{blocks['d']}};
+    auto chain4 = chain_type {blocks['c'], block_ids_type{blocks['d']}};
     tree.insert(chain4, pub_key_2, {});
     tree.add_confirmations(chain4, pub_key_2, 0);
     BOOST_TEST(blocks['d'] == tree.get_final_chain_head(2)->block_id);
@@ -94,8 +95,8 @@ BOOST_AUTO_TEST_CASE(prefix_chain_internal) try {
     auto lib_block_id = fc::sha256("beef");
     auto node = tree_node{lib_block_id};
 
-    prefix_tree tree(std::make_shared<tree_node>(node));
-    auto chain = chain_type{lib_block_id, blocks_type{fc::sha256("abc"), fc::sha256("def")}};
+    prefix_tree tree(std::make_unique<tree_node>(node));
+    auto chain = chain_type{lib_block_id, block_ids_type{fc::sha256("abc"), fc::sha256("def")}};
     tree.insert(chain, pub_key_1, {});
     tree.add_confirmations(chain, pub_key_1, 0);
 
@@ -108,7 +109,7 @@ BOOST_AUTO_TEST_CASE(prefix_chain_internal) try {
     BOOST_TEST(chain_first_node->adjacent_nodes[0] == tree.get_final_chain_head(1));
 
     // add second chain
-    chain = chain_type{fc::sha256("abc"), blocks_type{fc::sha256("bbc")}};
+    chain = chain_type{fc::sha256("abc"), block_ids_type{fc::sha256("bbc")}};
     tree.insert(chain, pub_key_2, {});
     tree.add_confirmations(chain, pub_key_2, 0);
 
@@ -125,6 +126,7 @@ BOOST_AUTO_TEST_SUITE(prevote_tests)
 BOOST_AUTO_TEST_CASE(prevote_validate_success) try {
     auto priv_key = private_key::generate();
     auto pub_key = priv_key.get_public_key();
+    std::vector<public_key> pub_keys {pub_key};
 
     auto prevote = prevote_type {
         0,
@@ -132,12 +134,13 @@ BOOST_AUTO_TEST_CASE(prevote_validate_success) try {
         { fc::sha256("b"), fc::sha256("c"), fc::sha256("d") }
     };
 
-    auto msg = prevote_msg(prevote, make_key_signature_provider(priv_key));
+    std::vector<signature_provider_type> key_signature_providers {make_key_signature_provider(priv_key)};
+    auto msg = prevote_msg(prevote, key_signature_providers);
 
     BOOST_TEST(prevote.round_num == msg.data.round_num);
     BOOST_TEST(prevote.base_block == msg.data.base_block);
     BOOST_TEST(prevote.blocks == msg.data.blocks);
-    BOOST_TEST(true == msg.validate(pub_key));
+    BOOST_TEST(true == msg.validate(pub_keys));
 
 } FC_LOG_AND_RETHROW()
 
@@ -151,15 +154,17 @@ BOOST_AUTO_TEST_CASE(prevote_validate_fail) try {
         { fc::sha256("b"), fc::sha256("c"), fc::sha256("d") }
     };
 
-    auto msg = prevote_msg(prevote, make_key_signature_provider(priv_key));
+    std::vector<signature_provider_type> key_signature_providers {make_key_signature_provider(priv_key)};
+    auto msg = prevote_msg(prevote, key_signature_providers);
 
     auto priv_key_2 = private_key::generate();
     auto pub_key_2 = priv_key_2.get_public_key();
+    std::vector<public_key> pub_keys_2 {pub_key_2};
 
     BOOST_TEST(prevote.round_num == msg.data.round_num);
     BOOST_TEST(prevote.base_block == msg.data.base_block);
     BOOST_TEST(prevote.blocks == msg.data.blocks);
-    BOOST_TEST(false == msg.validate(pub_key_2));
+    BOOST_TEST(false == msg.validate(pub_keys_2));
 
 } FC_LOG_AND_RETHROW()
 
@@ -171,17 +176,19 @@ BOOST_AUTO_TEST_SUITE(precommit_tests)
 BOOST_AUTO_TEST_CASE(precommit_validate_success) try {
     auto priv_key = private_key::generate();
     auto pub_key = priv_key.get_public_key();
+    std::vector<public_key> pub_keys {pub_key};
 
     auto precommit = precommit_type {
         0,
         fc::sha256("a")
     };
 
-    auto msg = precommit_msg(precommit, make_key_signature_provider(priv_key));
+    std::vector<signature_provider_type> key_signature_providers {make_key_signature_provider(priv_key)};
+    auto msg = precommit_msg(precommit, key_signature_providers);
 
     BOOST_TEST(precommit.round_num == msg.data.round_num);
     BOOST_TEST(precommit.block_id == msg.data.block_id);
-    BOOST_TEST(true == msg.validate(pub_key));
+    BOOST_TEST(true == msg.validate(pub_keys));
 
 } FC_LOG_AND_RETHROW()
 
@@ -194,14 +201,16 @@ BOOST_AUTO_TEST_CASE(precommit_validate_fail) try {
         fc::sha256("a")
     };
 
-    auto msg = precommit_msg(precommit, make_key_signature_provider(priv_key));
+    std::vector<signature_provider_type> key_signature_providers {make_key_signature_provider(priv_key)};
+    auto msg = precommit_msg(precommit, key_signature_providers);
 
     auto priv_key_2 = private_key::generate();
     auto pub_key_2 = priv_key_2.get_public_key();
+    std::vector<public_key> pub_keys_2 {pub_key_2};
 
     BOOST_TEST(precommit.round_num == msg.data.round_num);
     BOOST_TEST(precommit.block_id == msg.data.block_id);
-    BOOST_TEST(false == msg.validate(pub_key_2));
+    BOOST_TEST(false == msg.validate(pub_keys_2));
 
 } FC_LOG_AND_RETHROW()
 
@@ -211,7 +220,7 @@ BOOST_AUTO_TEST_SUITE(last_inserted_block_test)
 
 BOOST_AUTO_TEST_CASE(get_last_inserted_block) try {
     auto lib_block_id = fc::sha256("beef");
-    auto root = std::make_shared<tree_node>(tree_node{lib_block_id});
+    auto root = std::make_unique<tree_node>(tree_node{lib_block_id});
     auto chain1 = chain_type{lib_block_id, {fc::sha256("a")}};
     auto chain2 = chain_type{fc::sha256("a"), {fc::sha256("b")}};
     auto pub_key1 = get_pub_key();
@@ -233,9 +242,9 @@ BOOST_AUTO_TEST_SUITE(remove_confirmations)
 
 BOOST_AUTO_TEST_CASE(remove_confirmations_test) try {
     auto lib_block_id = fc::sha256("beef");
-    auto root = std::make_shared<tree_node>(tree_node{lib_block_id});
+    auto root = std::make_unique<tree_node>(tree_node{lib_block_id});
     auto chain = chain_type{lib_block_id,
-                            vector<block_id_type>{fc::sha256("a")}};
+                            block_ids_type{fc::sha256("a")}};
     prefix_tree tree(std::move(root));
     tree.insert(chain, get_pub_key(), {});
     tree.add_confirmations(chain, get_pub_key(), 0);

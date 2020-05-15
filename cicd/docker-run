@@ -1,0 +1,178 @@
+#!/bin/bash
+
+set -eu
+set -o pipefail
+
+. "${BASH_SOURCE[0]%/*}/../scripts/utils.sh"
+
+readonly ccache_dir="$HOME"/.ccache
+
+project="${PROGPATH%/*}"
+project="${project##*/}"
+readonly  project="${project,,}" # low case
+
+case "$project" in
+(daobet*)  readonly org=daocasino ;;
+(haya*)    readonly org=mixbytes ;;
+esac
+
+readonly default_build_type=RelWithDebInfo
+
+# helpers
+
+usage() {
+  echo "Usage:"
+  echo
+  echo "  ./$PROGNAME shell <os>                -- run Bash in new container with node image"
+  echo "  ./$PROGNAME tools <os>                -- build Docker image with build environment"
+  echo "  ./$PROGNAME package [ OPTIONS ] <os>  -- build node and create OS packages"
+  echo "  ./$PROGNAME image <image-name>        -- create Ubuntu-based Docker image with node installed"
+  echo
+  echo "  ./$PROGNAME { help | -h | --help }    -- show this message"
+  echo
+  echo "<os> is one of 'ubuntu' or 'centos'."
+  echo
+  echo "Options for 'package' command:"
+  echo
+  echo "  --timeout <seconds> : maximum time for command execution (positive integer)"
+  echo "  --build-type <type> : build type: Debug, Release, RelWithDebInfo, or MinSizeRel;"
+  echo "                        default: $default_build_type"
+  echo "  --tests <regex>     : list of tests; regular expression passed to ctest command (-R argument)"
+}
+
+validate_os() {
+  local os="${1:?}"
+  case "$os" in
+  (ubuntu|centos) ;;
+  (*) die "Invalid <os> argument: $os. See ./$PROGNAME help." ;;
+  esac
+}
+validate_build_type() {
+  local bt="${1:?}"
+  case "$bt" in
+  (Debug|Release|RelWithDebInfo|MinSizeRel) ;;
+  (*) die "Invalid argument to --build-type option: $bt. See ./$PROGNAME help." ;;
+  esac
+}
+validate_timeout() {
+  local to="${1:?}"
+  [[ "$to" -gt 0 ]] && [[ "$to" =~ ^[0-9]+$ ]] ||
+    die "Invalid argument to --timeout option: $to. See ./$PROGNAME help."
+}
+get_container_name() {
+  local os="${1:?}"
+  echo -n "${project}-node.$os"
+}
+get_image_name() {
+  local os="${1:?}"
+  echo -n "$org/$project.build-env.$os:latest"
+}
+
+# commands
+
+cmd_shell() {
+  local os="${1:-}"
+  validate_os "$os"
+
+  local container image
+  container="$( get_container_name "$os" )"
+  image="$( get_image_name "$os" )"
+
+  set -x
+  docker run \
+    -v "$PWD:/work/$project" \
+    -v "$ccache_dir/$os:/root/.ccache" \
+    --rm --name="$container" \
+    -ti "$image" \
+    bash
+  set +x
+}
+
+cmd_tools() {
+  local os="${1:-}"
+  validate_os "$os"
+
+  local image
+  image="$( get_image_name "$os" )"
+
+  set -x
+  docker build \
+    -f "cicd/Dockerfile.build-env.$os" \
+    --build-arg=project="$project" \
+    --target node-build-env \
+    --tag "$image" .
+  set +x
+}
+
+cmd_package() {
+  local timeout=
+  local build_type="$default_build_type"
+  local tests=
+
+  # parse options
+  local opts
+  opts="$(getopt -o "" -l "\
+timeout:,\
+build-type:,\
+tests:,\
+help" -n "$PROGNAME" -- "$@" )"
+  eval set -- "$opts"
+  while true; do
+    case "${1:-}" in
+    (--timeout)     timeout="$2" ; shift 2 ;;
+    (--build-type)  build_type="$2" ; shift 2 ;;
+    (--tests)       tests="$2" ; shift 2 ;;
+    (--)            shift ; break ;;
+    (*)             die "Invalid option: ${1:-}." ;;
+    esac
+  done
+  validate_timeout "$timeout"
+  validate_build_type "$build_type"
+
+  local os="${1:-}"
+  validate_os "$os"
+
+  local -a cmd=()
+  [[ -z "$timeout" ]] || cmd+=(timeout "$timeout")
+  cmd+=("/work/$project/cicd/build-in-docker.sh" "$os" "$project" "$build_type" "$tests")
+
+  local container image
+  container="$( get_container_name "$os" )"
+  image="$( get_image_name "$os" )"
+
+  set -x
+  # FIXME: -v duplication
+  docker run \
+    -v "$PWD:/work/$project/" \
+    -v "$ccache_dir/$os:/root/.ccache" \
+    --rm --name "$container" \
+    -ti "$image" \
+    "${cmd[@]}"
+  set +x
+}
+
+cmd_image() {
+  local image="${1:?"<image> argument required."}"
+
+  set -x
+  docker build --no-cache -t "$image" -f cicd/Dockerfile build/packages/
+  set +x
+}
+
+# main
+
+case "$project" in
+(haya*|daobet*) ;;
+(*) die "Bad project name: $project." ;;
+esac
+
+cmd="${1:-}"
+shift || true
+case "$cmd" in
+(shell)           cmd_shell "$@" ;;
+(tools)           cmd_tools "$@" ;;
+(package)         cmd_package "$@" ;;
+(image)           cmd_image "$@" ;;
+(-h|--help|help)  usage ; exit ;;
+(*)               err "Invalid command: $cmd." ; usage ; die ;;
+esac

@@ -2,7 +2,7 @@
  *  @file
  *  @copyright defined in eos/LICENSE
  */
-#include "snapshot_test.hpp"
+#include <snapshot_test.hpp>
 
 using namespace eosio;
 

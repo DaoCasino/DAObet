@@ -1,4 +1,3 @@
-import testUtils
 import p2p_test_peers
 import random
 

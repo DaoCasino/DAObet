@@ -18,7 +18,7 @@ const static auto default_reversible_cache_size = 340*1024*1024ll;/// 1MB * 340 
 const static auto default_reversible_guard_size = 2*1024*1024ll;/// 1MB * 340 blocks based on 21 producer BFT delay
 
 const static auto default_state_dir_name     = "state";
-const static auto forkdb_filename            = "forkdb.dat";
+const static auto forkdb_filename            = "fork_db.dat";
 const static auto default_state_size            = 1*1024*1024*1024ll;
 const static auto default_state_guard_size      =    128*1024*1024ll;
 
@@ -51,6 +51,7 @@ static const uint32_t account_cpu_usage_average_window_ms  = 24*60*60*1000l;
 static const uint32_t account_net_usage_average_window_ms  = 24*60*60*1000l;
 static const uint32_t block_cpu_usage_average_window_ms    = 60*1000l;
 static const uint32_t block_size_average_window_ms         = 60*1000l;
+static const uint32_t maximum_elastic_resource_multiplier  = 1000;
 
 //const static uint64_t   default_max_storage_size       = 10 * 1024;
 //const static uint32_t   default_max_trx_runtime        = 10*1000;
@@ -72,6 +73,7 @@ const static uint32_t   default_max_block_cpu_usage                 = 200'000; /
 const static uint32_t   default_target_block_cpu_usage_pct          = 10 * percent_1;
 const static uint32_t   default_max_transaction_cpu_usage           = 3*default_max_block_cpu_usage/4; /// max trx cpu usage in microseconds
 const static uint32_t   default_min_transaction_cpu_usage           = 100; /// min trx cpu usage in microseconds (10000 TPS equiv)
+const static uint32_t   default_subjective_cpu_leeway_us            = 31000; /// default subjective cpu leeway in microseconds
 
 const static uint32_t   default_max_trx_lifetime               = 60*60; // 1 hour
 const static uint32_t   default_deferred_trx_expiration_window = 10*60; // 10 minutes
@@ -80,6 +82,7 @@ const static uint32_t   default_max_inline_action_size         = 4 * 1024;   // 
 const static uint16_t   default_max_inline_action_depth        = 4;
 const static uint16_t   default_max_auth_depth                 = 6;
 const static uint32_t   default_sig_cpu_bill_pct               = 50 * percent_1; // billable percentage of signature recovery
+const static uint32_t   default_block_cpu_effort_pct           = 80 * percent_1; // percentage of block time used for producing block
 const static uint16_t   default_controller_thread_pool_size    = 2;
 
 const static uint32_t   min_net_usage_delta_between_base_and_max_for_trx  = 10*1024;

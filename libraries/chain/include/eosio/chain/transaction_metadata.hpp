@@ -5,6 +5,7 @@
 #pragma once
 #include <eosio/chain/transaction.hpp>
 #include <eosio/chain/types.hpp>
+#include <boost/asio/io_context.hpp>
 #include <future>
 
 namespace boost { namespace asio {
@@ -32,6 +33,7 @@ class transaction_metadata {
       bool                                                       accepted = false;
       bool                                                       implicit = false;
       bool                                                       scheduled = false;
+      uint32_t                                                   billed_cpu_time_us = 0;
 
       transaction_metadata() = delete;
       transaction_metadata(const transaction_metadata&) = delete;
@@ -53,13 +55,11 @@ class transaction_metadata {
 
       // must be called from main application thread
       static signing_keys_future_type
-      start_recover_keys( const transaction_metadata_ptr& mtrx, boost::asio::thread_pool& thread_pool,
+      start_recover_keys( const transaction_metadata_ptr& mtrx, boost::asio::io_context& thread_pool,
                           const chain_id_type& chain_id, fc::microseconds time_limit );
 
       // start_recover_keys must be called first
       recovery_keys_type recover_keys( const chain_id_type& chain_id );
-
-
 };
 
 } } // eosio::chain

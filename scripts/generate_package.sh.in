@@ -1,4 +1,6 @@
-#! /bin/bash
+#!/bin/bash
+
+set -eo pipefail
 
 VARIANT=$1
 
@@ -9,11 +11,11 @@ VERSION="@VERSION_FULL@"
 # Using CMAKE_BINARY_DIR uses an absolute path and will break cross-vm building/download/make functionality
 BUILD_DIR="../../build"
 
-VENDOR="@VENDOR@"
-PROJECT="@PROJECT_NAME@"
-DESC="@DESC@"
-URL="@URL@"
-EMAIL="@EMAIL@"
+VENDOR="@GEN_VENDOR@"
+PROJECT="@GEN_PROJECT_NAME@"
+DESC="@GEN_DESC@"
+URL="@GEN_URL@"
+EMAIL="@GEN_EMAIL@"
 
 export BUILD_DIR
 export VERSION_NO_SUFFIX

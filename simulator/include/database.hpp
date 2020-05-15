@@ -78,20 +78,20 @@ public:
         conf_number = conf_number_;
     }
 
-    void insert(const fork_db_chain_type_ptr& chain) {
-        insert(*chain);
+    bool insert(const fork_db_chain_type_ptr& chain) {
+        return insert(*chain);
     }
 
-    void insert(const fork_db_chain_type& chain) {
+    bool insert(const fork_db_chain_type& chain) {
         auto node = find(chain.base_block);
         if (!node) {
             throw ForkDbInsertException();
         }
-        insert(node, chain.blocks);
+        return insert(node, chain.blocks);
     }
 
-    void insert(fork_db_node_ptr node, const vector<pair<block_id_type, public_key_type>>& blocks) {
-        try_update_lib(insert_blocks(node, blocks));
+    bool insert(fork_db_node_ptr node, const vector<pair<block_id_type, public_key_type>>& blocks) {
+        return try_update_lib(insert_blocks(node, blocks));
     }
 
     fork_db_node_ptr find(const block_id_type& block_id) const {
@@ -134,13 +134,15 @@ private:
     fork_db_node_ptr root;
     size_t conf_number;
 
-    void try_update_lib(const fork_db_node_ptr& new_chain_head) {
+    bool try_update_lib(const fork_db_node_ptr& new_chain_head) {
         auto path_to_chain_head = construct_path(new_chain_head);
         if (path_to_chain_head.size() > conf_number) {
             // we have new lib
             auto new_lib = path_to_chain_head[path_to_chain_head.size() - conf_number - 1];
             set_new_lib(new_lib);
+            return true;
         }
+        return false;
     }
 
     void set_new_lib(const fork_db_node_ptr& node) {

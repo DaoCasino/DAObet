@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 
 from testUtils import Utils
-import testUtils
 import time
 from Cluster import Cluster
 from WalletMgr import WalletMgr
 from Node import BlockType
 from Node import Node
-from TestHelper import AppArgs
 from TestHelper import TestHelper
 
 import decimal
@@ -21,8 +19,6 @@ import signal
 # --keep-logs <Don't delete var/lib/node_* folders upon test completion>
 ###############################################################
 Print=Utils.Print
-
-from core_symbol import CORE_SYMBOL
 
 def analyzeBPs(bps0, bps1, expectDivergence):
     start=0
@@ -115,7 +111,7 @@ def getMinHeadAndLib(prodNodes):
 
 
 args = TestHelper.parse_args({"--prod-count","--dump-error-details","--keep-logs","-v","--leave-running","--clean-run",
-                              "--p2p-plugin","--wallet-port"})
+                              "--wallet-port"})
 Utils.Debug=args.v
 totalProducerNodes=2
 totalNonProducerNodes=1
@@ -128,7 +124,6 @@ keepLogs=args.keep_logs
 dontKill=args.leave_running
 prodCount=args.prod_count
 killAll=args.clean_run
-p2pPlugin=args.p2p_plugin
 walletPort=args.wallet_port
 
 walletMgr=WalletMgr(True, port=walletPort)
@@ -136,8 +131,7 @@ testSuccessful=False
 killEosInstances=not dontKill
 killWallet=not dontKill
 
-WalletdName=Utils.EosWalletName
-ClientName="cleos"
+WalletdName=Utils.WalletName
 
 try:
     TestHelper.printSystemInfo("BEGIN")
@@ -146,9 +140,9 @@ try:
     cluster.killall(allInstances=killAll)
     cluster.cleanup()
     Print("Stand up cluster")
-    specificExtraNodeosArgs={}
+    specificExtraNodeArgs={}
     # producer nodes will be mapped to 0 through totalProducerNodes-1, so the number totalProducerNodes will be the non-producing node
-    specificExtraNodeosArgs[totalProducerNodes]="--plugin eosio::test_control_api_plugin"
+    specificExtraNodeArgs[totalProducerNodes]="--plugin eosio::test_control_api_plugin"
 
 
     # ***   setup topogrophy   ***
@@ -156,9 +150,9 @@ try:
     # "bridge" shape connects defprocera through defproducerk (in node0) to each other and defproducerl through defproduceru (in node01)
     # and the only connection between those 2 groups is through the bridge node
 
-    if cluster.launch(prodCount=prodCount, onlyBios=False, topo="bridge", pnodes=totalProducerNodes,
-                      totalNodes=totalNodes, totalProducers=totalProducers, p2pPlugin=p2pPlugin,
-                      useBiosBootFile=False, specificExtraNodeosArgs=specificExtraNodeosArgs) is False:
+    if cluster.launch(prodCount=prodCount, topo="bridge", pnodes=totalProducerNodes,
+                      totalNodes=totalNodes, totalProducers=totalProducers,
+                      useBiosBootFile=False, specificExtraNodeArgs=specificExtraNodeArgs) is False:
         Utils.cmdError("launcher")
         Utils.errorExit("Failed to stand up eos cluster.")
     Print("Validating system accounts after bootstrap")
@@ -218,7 +212,7 @@ try:
     for account in accounts:
         Print("Create new account %s via %s" % (account.name, cluster.eosioAccount.name))
         trans=node.createInitializeAccount(account, cluster.eosioAccount, stakedDeposit=0, waitForTransBlock=True, stakeNet=1000, stakeCPU=1000, buyRAM=1000, exitOnError=True)
-        transferAmount="100000000.0000 {0}".format(CORE_SYMBOL)
+        transferAmount="100000000.0000 {0}".format(Utils.CoreSym)
         Print("Transfer funds %s from account %s to %s" % (transferAmount, cluster.eosioAccount.name, account.name))
         node.transferFunds(cluster.eosioAccount, account, transferAmount, "test transfer", waitForTransBlock=True)
         trans=node.delegatebw(account, 20000000.0000, 20000000.0000, waitForTransBlock=True, exitOnError=True)
@@ -274,7 +268,8 @@ try:
             blockProducer=node.getBlockProducerByNum(blockNum)
 
         if producerToSlot[lastBlockProducer]["count"]!=inRowCountPerProducer:
-            Utils.errorExit("Producer %s, in slot %d, expected to produce %d blocks but produced %d blocks" % (blockProducer, slot, inRowCountPerProducer, producerToSlot[lastBlockProducer]["count"]))
+            Utils.errorExit("Producer %s, in slot %d, expected to produce %d blocks but produced %d blocks.  At block number %d." %
+                            (lastBlockProducer, slot, inRowCountPerProducer, producerToSlot[lastBlockProducer]["count"], blockNum-1))
 
         if blockProducer==productionCycle[0]:
             break

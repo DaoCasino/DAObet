@@ -1,5 +1,6 @@
-#! /bin/bash
-set -e
+#!/bin/bash
+
+set -eo pipefail
 
 PREFIX="usr"
 SPREFIX=${PREFIX}
@@ -34,13 +35,13 @@ done
 echo -e ${PFILES} &> /root/rpmbuild/BUILD/filenames.txt
 
 mkdir -p ${PROJECT}
-echo -e "Name: ${PROJECT} 
+echo -e "Name: ${PROJECT}
 Version: ${VERSION_NO_SUFFIX}
 License: MIT
-Vendor: ${VENDOR} 
-Source: ${URL} 
+Vendor: ${VENDOR}
+Source: ${URL}
 Requires: openssl, gmp, libstdc++, bzip2, libcurl, libusbx
-URL: ${URL} 
+URL: ${URL}
 Packager: ${VENDOR} <${EMAIL}>
 Summary: ${DESC}
 Release: ${RELEASE}

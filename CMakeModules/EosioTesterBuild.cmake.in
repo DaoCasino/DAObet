@@ -22,17 +22,18 @@ find_package(LLVM 4.0 REQUIRED CONFIG)
 
 link_directories(${LLVM_LIBRARY_DIR})
 
-set( CMAKE_CXX_STANDARD 14 )
+set( CMAKE_CXX_STANDARD 17 )
 set( CMAKE_CXX_EXTENSIONS ON )
 set( CXX_STANDARD_REQUIRED ON )
 
 if ( APPLE )
-   set( CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -Wall -Wno-deprecated-declarations" )
+   set( CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS} -Wall -Wno-deprecated-declarations" )
 else ( APPLE )
-   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
-   set( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")
+   set( CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS} -Wall")
 endif ( APPLE )
 
+### Remove after Boost 1.70 CMake fixes are in place
+set( Boost_NO_BOOST_CMAKE ON CACHE STRING "ON or OFF" )
 set( Boost_USE_STATIC_LIBS ON CACHE STRING "ON or OFF" )
 find_package(Boost 1.67 REQUIRED COMPONENTS
    date_time
@@ -42,29 +43,31 @@ find_package(Boost 1.67 REQUIRED COMPONENTS
    iostreams
    unit_test_framework)
 
-find_library(libtester eosio_testing @CMAKE_BINARY_DIR@/libraries/testing)
-find_library(libchain eosio_chain @CMAKE_BINARY_DIR@/libraries/chain)
+find_library(libtester eosio_testing @CMAKE_BINARY_DIR@/libraries/testing NO_DEFAULT_PATH)
+find_library(libchain eosio_chain @CMAKE_BINARY_DIR@/libraries/chain NO_DEFAULT_PATH)
 if ( "${CMAKE_BUILD_TYPE}" STREQUAL "Debug" )
-   find_library(libfc fc_debug @CMAKE_BINARY_DIR@/libraries/fc)
-   find_library(libsecp256k1 secp256k1_debug @CMAKE_BINARY_DIR@/libraries/fc/secp256k1)
-   
+   find_library(libfc fc_debug @CMAKE_BINARY_DIR@/libraries/fc NO_DEFAULT_PATH)
+   find_library(libsecp256k1 secp256k1_debug @CMAKE_BINARY_DIR@/libraries/fc/secp256k1 NO_DEFAULT_PATH)
+
 else()
-   find_library(libfc fc @CMAKE_BINARY_DIR@/libraries/fc)
-   find_library(libsecp256k1 secp256k1 @CMAKE_BINARY_DIR@/libraries/fc/secp256k1)
+   find_library(libfc fc @CMAKE_BINARY_DIR@/libraries/fc NO_DEFAULT_PATH)
+   find_library(libsecp256k1 secp256k1 @CMAKE_BINARY_DIR@/libraries/fc/secp256k1 NO_DEFAULT_PATH)
 endif()
 
-find_library(libwasm WASM @CMAKE_BINARY_DIR@/libraries/wasm-jit/Source/WASM)
-find_library(libwast WAST @CMAKE_BINARY_DIR@/libraries/wasm-jit/Source/WAST)
-find_library(libir IR     @CMAKE_BINARY_DIR@/libraries/wasm-jit/Source/IR)
-find_library(libwabt wabt @CMAKE_BINARY_DIR@/libraries/wabt)
-find_library(libplatform Platform @CMAKE_BINARY_DIR@/libraries/wasm-jit/Source/Platform)
-find_library(liblogging Logging @CMAKE_BINARY_DIR@/libraries/wasm-jit/Source/Logging)
-find_library(libruntime Runtime @CMAKE_BINARY_DIR@/libraries/wasm-jit/Source/Runtime)
-find_library(libsoftfloat softfloat @CMAKE_BINARY_DIR@/libraries/softfloat)
-find_library(liboscrypto crypto @OPENSSL_ROOT_DIR@/lib)
-find_library(libosssl ssl @OPENSSL_ROOT_DIR@/lib)
-find_library(libchainbase chainbase @CMAKE_BINARY_DIR@/libraries/chainbase)
-find_library(libbuiltins builtins @CMAKE_BINARY_DIR@/libraries/builtins)
+find_library(libwasm WASM @CMAKE_BINARY_DIR@/libraries/wasm-jit/Source/WASM NO_DEFAULT_PATH)
+find_library(libwast WAST @CMAKE_BINARY_DIR@/libraries/wasm-jit/Source/WAST NO_DEFAULT_PATH)
+find_library(libir IR     @CMAKE_BINARY_DIR@/libraries/wasm-jit/Source/IR NO_DEFAULT_PATH)
+find_library(libwabt wabt @CMAKE_BINARY_DIR@/libraries/wabt NO_DEFAULT_PATH)
+find_library(libplatform Platform @CMAKE_BINARY_DIR@/libraries/wasm-jit/Source/Platform NO_DEFAULT_PATH)
+find_library(liblogging Logging @CMAKE_BINARY_DIR@/libraries/wasm-jit/Source/Logging NO_DEFAULT_PATH)
+find_library(libruntime Runtime @CMAKE_BINARY_DIR@/libraries/wasm-jit/Source/Runtime NO_DEFAULT_PATH)
+find_library(libsoftfloat softfloat @CMAKE_BINARY_DIR@/libraries/softfloat NO_DEFAULT_PATH)
+get_filename_component(cryptodir @OPENSSL_CRYPTO_LIBRARY@ DIRECTORY)
+find_library(liboscrypto crypto "${cryptodir}" NO_DEFAULT_PATH)
+get_filename_component(ssldir @OPENSSL_SSL_LIBRARY@ DIRECTORY)
+find_library(libosssl ssl "${ssldir}" NO_DEFAULT_PATH)
+find_library(libchainbase chainbase @CMAKE_BINARY_DIR@/libraries/chainbase NO_DEFAULT_PATH)
+find_library(libbuiltins builtins @CMAKE_BINARY_DIR@/libraries/builtins NO_DEFAULT_PATH)
 find_library(GMP_LIBRARIES NAMES libgmp.a gmp.lib gmp libgmp-10 mpir
     HINTS ENV GMP_LIB_DIR
           ENV GMP_DIR
@@ -72,7 +75,7 @@ find_library(GMP_LIBRARIES NAMES libgmp.a gmp.lib gmp libgmp-10 mpir
     DOC "Path to the GMP library"
 )
 
-macro(add_eosio_test test_name)
+macro(add_eosio_test_executable test_name)
    add_executable( ${test_name} ${ARGN} )
    target_link_libraries( ${test_name}
        ${LLVM}
@@ -138,13 +141,14 @@ macro(add_eosio_test test_name)
                                @CMAKE_SOURCE_DIR@/libraries/chainbase/include
                                @CMAKE_SOURCE_DIR@/libraries/testing/include
                                @CMAKE_SOURCE_DIR@/libraries/wasm-jit/Include )
-                            #
+endmacro()
+
+macro(add_eosio_test test_name)
+   add_eosio_test_executable( ${test_name} ${ARGN} )
+   #This will generate a test with the default runtime
+   add_test(NAME ${test_name} COMMAND ${test_name} --report_level=detailed --color_output)
    #Manually run unit_test for all supported runtimes
    #To run unit_test with all log from blockchain displayed, put --verbose after --, i.e. unit_test -- --verbose
-   add_test(NAME ${test_name}_binaryen COMMAND ${test_name}
-    --report_level=detailed --color_output -- --binaryen)
-   add_test(NAME ${test_name}_wavm COMMAND ${test_name}
-    --report_level=detailed --color_output --catch_system_errors=no -- --wavm)
 endmacro()
 
 if(ENABLE_COVERAGE_TESTING)

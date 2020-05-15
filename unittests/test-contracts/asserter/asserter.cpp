@@ -2,7 +2,7 @@
  *  @file
  *  @copyright defined in eos/LICENSE
  */
-#include "asserter.hpp"
+#include <asserter.hpp>
 
 using namespace eosio;
 

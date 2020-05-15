@@ -1,0 +1,8 @@
+if( EOSIO_COMPILE_TEST_CONTRACTS )
+   add_contract_with_abi( ram_restrictions_test ram_restrictions_test ram_restrictions_test.cpp )
+   target_include_directories( ram_restrictions_test PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} )
+   install( TARGETS ram_restrictions_test DESTINATION ${CMAKE_CURRENT_SOURCE_DIR} )
+else()
+   configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/ram_restrictions_test.wasm ${CMAKE_CURRENT_BINARY_DIR}/ram_restrictions_test.wasm COPYONLY )
+   configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/ram_restrictions_test.abi  ${CMAKE_CURRENT_BINARY_DIR}/ram_restrictions_test.abi  COPYONLY )
+endif()

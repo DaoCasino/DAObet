@@ -1,0 +1,60 @@
+# TODO: remove daocasino/daobet-build-tools-ubuntu and daocasino/daobet-build-tools-centos
+#       after merging new build & cicd scripts into master branch
+#       (same for mixbytes organzation)
+
+#
+# See cicd/docker-run tools
+#
+FROM ubuntu:18.04 AS node-build-env
+ARG project
+LABEL \
+  author="Andrey Levkin <alevkin@gmail.com>" \
+  maintainer="Andrew Petelin <adrianopol@gmail.com>" \
+  description="Base image for building ${project} on Ubuntu"
+# ${project} subdir is important for project name detection in build scripts
+COPY ./scripts /work/${project}/scripts
+RUN \
+  apt-get update && \
+  apt-get -V -y --no-install-recommends --no-install-suggests install apt-utils ca-certificates && \
+  echo ">>> Build dependencies:" && \
+  echo "    * curl : for python-based tests" && \
+  echo "    * gettext-base : for envsubst" && \
+  apt-get -V -y --no-install-recommends --no-install-suggests install ccache cmake curl make git sudo python3 gettext-base && \
+  env INSTALL_PREFIX=/root/ bash -x /work/${project}/scripts/build.sh --deps-only --install-mongo --enable-mongo && \
+  rm -rf \
+    /root/src \
+    /work/ \
+    /var/cache \
+    /var/lib/apt/lists/*
+
+
+FROM node-build-env AS node-with-cdt
+ARG project
+COPY . /work/${project}
+COPY --from=daocasino/ubuntu-cdt-1.6.3-patched:latest /eosio.cdt_*.deb /
+WORKDIR /work/${project}
+RUN \
+  echo ">>> Building both debug and release variants (in than order), so that one can use both" && \
+  echo "    libfc.a (for release) and libfc_debug.a (for debug) libraries for contracts' tests" && \
+  echo "    (the same for secp256k1 library)." && \
+  ./scripts/build.sh --build-type Debug && \
+  ( cd build/ && make install ) && \
+  ./scripts/build.sh --build-type RelWithDebInfo && \
+  ( cd build/ && make install ) && \
+  echo ">>> Cleaning ..." && \
+  echo "    (We preserve /build/unittests/contracts directory because" && \
+  echo "     base_tester::push_genesis_block() loads wasm-file in contracts::eosio_bios_wasm())" && \
+  find . -mindepth 1 \! -regex './build/unittests/contracts\(/.*\)?' \! -path ./build \! -path ./build/unittests -delete && \
+  dpkg -i /eosio.cdt_*.deb && \
+  rm -f /eosio.cdt_*.deb
+
+
+#~FROM node AS node-with-cdt
+#~COPY --from=ubuntu-cdt-patched:latest /eosio.cdt*.deb /
+#~WORKDIR /
+#~RUN \
+#~  dpkg -i /eosio.cdt*.deb && \
+#~  rm -f /eosio.cdt*.deb
+
+# to build contracts:
+#   docker run --rm -v "$PWD":/daobet.contracts -w /daobet.contracts -ti daocasino/daobet-with-cdt ./cicd/build.sh

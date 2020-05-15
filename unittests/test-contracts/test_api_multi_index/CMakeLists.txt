@@ -1,5 +1,7 @@
 if( EOSIO_COMPILE_TEST_CONTRACTS )
-   add_contract( test_api_multi_index test_api_multi_index test_api_multi_index.cpp )
+   add_contract_with_abi( test_api_multi_index test_api_multi_index test_api_multi_index.cpp )
+   target_include_directories( test_api_multi_index PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} )
+   install( TARGETS test_api_multi_index DESTINATION ${CMAKE_CURRENT_SOURCE_DIR} )
 else()
    configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/test_api_multi_index.wasm ${CMAKE_CURRENT_BINARY_DIR}/test_api_multi_index.wasm COPYONLY )
    configure_file( ${CMAKE_CURRENT_SOURCE_DIR}/test_api_multi_index.abi  ${CMAKE_CURRENT_BINARY_DIR}/test_api_multi_index.abi  COPYONLY )

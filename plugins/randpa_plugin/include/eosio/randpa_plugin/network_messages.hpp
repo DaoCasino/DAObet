@@ -8,17 +8,26 @@
 
 namespace randpa_finality {
 
+/// Randpa-specific network messages.
+///
+/// @tparam T Particular RANDPA message type stored in a message.
 template<class T>
 class network_msg {
 public:
     T data;
-    signature_type signature;
+    std::vector<signature_type> signatures;
+
+    //
+
     network_msg() = default;
-    network_msg(const T& data_, const signature_type& signature_): data(data_), signature(signature_) {}
-    network_msg(const T& data_, signature_type&& signature_): data(data_), signature(signature_) {}
-    network_msg(const T& data_, const signature_provider_type& signature_provider) {
-        data = data_;
-        signature = signature_provider(hash());
+    network_msg(const T& data_, const std::vector<signature_type>& signatures_): data(data_), signatures(signatures_) {}
+    network_msg(const T& data_, std::vector<signature_type>&& signatures_): data(data_), signatures(signatures_) {}
+    network_msg(const T& data_, const std::vector<signature_provider_type>& signature_providers)
+        : data{data_}
+    {
+        for (const auto& sig_prov : signature_providers) {
+            signatures.push_back(sig_prov(hash()));
+        }
     }
 
     digest_type hash() const {
@@ -28,15 +37,22 @@ public:
         return e.result();
     }
 
-    public_key_type public_key() const {
-        return public_key_type(signature, hash());
+    std::vector<public_key_type> public_keys() const {
+        std::vector<public_key_type> public_keys;
+        public_keys.reserve(signatures.size());
+
+        for (const auto& sign : signatures) {
+            public_keys.push_back(public_key_type(sign, hash()));
+        }
+        return public_keys;
     }
 
-    bool validate(const public_key_type& pub_key) const {
-        return public_key() == pub_key;
+    bool validate(const std::vector<public_key_type>& pub_keys) const {
+        return pub_keys == public_keys();
     }
 };
 
+// Various message types for RANDPA finality functioning.
 
 struct handshake_type {
     block_id_type lib;
@@ -49,7 +65,7 @@ struct handshake_ans_type {
 struct prevote_type {
     uint32_t round_num;
     block_id_type base_block;
-    std::vector<block_id_type> blocks;
+    block_ids_type blocks;
 };
 
 struct precommit_type {
@@ -103,4 +119,4 @@ FC_REFLECT(randpa_finality::proof_type, (round_num)(best_block)(prevotes)(precom
 FC_REFLECT(randpa_finality::finality_notice_type, (round_num)(best_block))
 FC_REFLECT(randpa_finality::finality_req_proof_type, (round_num))
 
-FC_REFLECT_TEMPLATE((typename T), randpa_finality::network_msg<T>, (data)(signature))
+FC_REFLECT_TEMPLATE((typename T), randpa_finality::network_msg<T>, (data)(signatures))

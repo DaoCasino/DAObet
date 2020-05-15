@@ -16,7 +16,7 @@ import random
 # -d <delay between nodes startup>
 # -v <verbose logging>
 # --kill-sig <kill signal [term|kill]>
-# --kill-count <nodeos instances to kill>
+# --kill-count <node instances to kill>
 # --dont-kill <Leave cluster running after test finishes>
 # --dump-error-details <Upon error print etc/eosio/node_*/config.ini and var/lib/node_*/stderr.log to stdout>
 # --keep-logs <Don't delete var/lib/node_* folders upon test completion>
@@ -26,7 +26,7 @@ import random
 Print=Utils.Print
 errorExit=Utils.errorExit
 
-args=TestHelper.parse_args({"-p","-d","-s","-c","--kill-sig","--kill-count","--keep-logs","--p2p-plugin"
+args=TestHelper.parse_args({"-p","-d","-s","-c","--kill-sig","--kill-count","--keep-logs"
                             ,"--dump-error-details","-v","--leave-running","--clean-run"})
 pnodes=args.p
 topo=args.s
@@ -40,7 +40,6 @@ killEosInstances= not args.leave_running
 dumpErrorDetails=args.dump_error_details
 keepLogs=args.keep_logs
 killAll=args.clean_run
-p2pPlugin=args.p2p_plugin
 
 seed=1
 Utils.Debug=debug
@@ -66,7 +65,7 @@ try:
     pnodes, topo, delay, chainSyncStrategyStr))
 
     Print("Stand up cluster")
-    if cluster.launch(pnodes, total_nodes, topo=topo, delay=delay, p2pPlugin=p2pPlugin) is False:
+    if cluster.launch(pnodes=pnodes, totalNodes=total_nodes, topo=topo, delay=delay) is False:
         errorExit("Failed to stand up eos cluster.")
 
     Print ("Wait for Cluster stabilization")
@@ -102,7 +101,7 @@ try:
     Print("Kill %d cluster node instances." % (killCount))
     if cluster.killSomeEosInstances(killCount, killSignal) is False:
         errorExit("Failed to kill Eos instances")
-    Print("nodeos instances killed.")
+    Print("node instances killed.")
 
     Print("Spread funds and validate")
     if not cluster.spreadFundsAndValidate(10):
@@ -115,7 +114,7 @@ try:
     Print ("Relaunch dead cluster nodes instances.")
     if cluster.relaunchEosInstances(cachePopen=True) is False:
         errorExit("Failed to relaunch Eos instances")
-    Print("nodeos instances relaunched.")
+    Print("node instances relaunched.")
 
     Print ("Resyncing cluster nodes.")
     if not cluster.waitOnClusterSync():
@@ -136,7 +135,7 @@ try:
             if node.popenProc is not None:
                 atLeastOne=True
                 node.interruptAndVerifyExitStatus()
-        assert atLeastOne, "Test is setup to verify that a cleanly interrupted nodeos exits with an exit status of 0, but this test may no longer be setup to do that"
+        assert atLeastOne, "Test is setup to verify that a cleanly interrupted node exits with an exit status of 0, but this test may no longer be setup to do that"
 
     testSuccessful=True
 finally:

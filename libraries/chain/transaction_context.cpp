@@ -163,11 +163,22 @@ namespace bacc = boost::accumulators;
          undo_session = c.mutable_db().start_undo_session(true);
       }
       trace->id = id;
-      trace->block_num = c.pending_block_state()->block_num;
+      trace->block_num = c.head_block_num() + 1;
       trace->block_time = c.pending_block_time();
       trace->producer_block_id = c.pending_producer_block_id();
       executed.reserve( trx.total_actions() );
    }
+
+///@{
+///HAYA: allow transaction extensions
+// void transaction_context::disallow_transaction_extensions( const char* error_msg )const {
+//    if( control.is_producing_block() ) {
+//       EOS_THROW( subjective_block_production_exception, error_msg );
+//    } else {
+//       EOS_THROW( disallowed_transaction_extensions_bad_block_exception, error_msg );
+//    }
+// }
+///@}
 
    void transaction_context::init(uint64_t initial_net_usage)
    {
@@ -214,16 +225,22 @@ namespace bacc = boost::accumulators;
 
       initial_objective_duration_limit = objective_duration_limit;
 
-      if( billed_cpu_time_us > 0 ) // could also call on explicit_billed_cpu_time but it would be redundant
-         validate_cpu_usage_to_bill( billed_cpu_time_us, false ); // Fail early if the amount to be billed is too high
+      if( explicit_billed_cpu_time )
+         validate_cpu_usage_to_bill( billed_cpu_time_us, std::numeric_limits<int64_t>::max(), false ); // Fail early if the amount to be billed is too high
 
       // Record accounts to be billed for network and CPU usage
-      for( const auto& act : trx.actions ) {
-         for( const auto& auth : act.authorization ) {
-            bill_to_accounts.insert( auth.actor );
+      if( control.is_builtin_activated(builtin_protocol_feature_t::only_bill_first_authorizer) ) {
+         bill_to_accounts.insert( trx.first_authorizer() );
+      } else {
+         for( const auto& act : trx.actions ) {
+            for( const auto& auth : act.authorization ) {
+               bill_to_accounts.insert( auth.actor );
+            }
          }
       }
 
+///@{
+/// HAYA: [cyb-280] add tx sponsorship
 #ifdef ENABLE_TX_SPONSORSHIP
       auto sponsor = get_sponsor();
       if (sponsor) {
@@ -231,6 +248,7 @@ namespace bacc = boost::accumulators;
          bill_to_accounts.insert(*sponsor);
       }
 #endif
+///@}
 
       validate_ram_usage.reserve( bill_to_accounts.size() );
 
@@ -270,6 +288,11 @@ namespace bacc = boost::accumulators;
          deadline_exception_code = billing_timer_exception_code;
       }
 
+      if( !explicit_billed_cpu_time ) {
+         // if account no longer has enough cpu to exec trx, don't try
+         validate_account_cpu_usage( billed_cpu_time_us, account_cpu_limit, true );
+      }
+
       eager_net_limit = (eager_net_limit/8)*8; // Round down to nearest multiple of word size (8 bytes) so check_net_usage can be efficient
 
       if( initial_net_usage > 0 )
@@ -287,6 +310,13 @@ namespace bacc = boost::accumulators;
 
    void transaction_context::init_for_implicit_trx( uint64_t initial_net_usage  )
    {
+///@{
+///HAYA: allow transaction extensions
+//    if( trx.transaction_extensions.size() > 0 ) {
+//       disallow_transaction_extensions( "no transaction extensions supported yet for implicit transactions" );
+//    }
+///@}
+
       published = control.pending_block_time();
       init( initial_net_usage);
    }
@@ -295,6 +325,13 @@ namespace bacc = boost::accumulators;
                                                  uint64_t packed_trx_prunable_size,
                                                  bool skip_recording )
    {
+///@{
+///HAYA: allow transaction extensions
+//    if( trx.transaction_extensions.size() > 0 ) {
+//       disallow_transaction_extensions( "no transaction extensions supported yet for input transactions" );
+//    }
+///@}
+
       const auto& cfg = control.get_global_properties().configuration;
 
       uint64_t discounted_size_for_pruned_data = packed_trx_prunable_size;
@@ -331,6 +368,17 @@ namespace bacc = boost::accumulators;
 
    void transaction_context::init_for_deferred_trx( fc::time_point p )
    {
+///@{
+///HAYA: allow transaction extensions
+//    if( (trx.expiration.sec_since_epoch() != 0) && (trx.transaction_extensions.size() > 0) ) {
+//       disallow_transaction_extensions( "no transaction extensions supported yet for deferred transactions" );
+//    }
+//    // If (trx.expiration.sec_since_epoch() == 0) then it was created after NO_DUPLICATE_DEFERRED_ID activation,
+//    // and so validation of its extensions was done either in:
+//    //   * apply_context::schedule_deferred_transaction for contract-generated transactions;
+//    //   * or transaction_context::init_for_input_trx for delayed input transactions.
+///@}
+
       published = p;
       trace->scheduled = true;
       apply_context_free = false;
@@ -342,17 +390,23 @@ namespace bacc = boost::accumulators;
 
       if( apply_context_free ) {
          for( const auto& act : trx.context_free_actions ) {
-            trace->action_traces.emplace_back();
-            dispatch_action( trace->action_traces.back(), act, true );
+            schedule_action( act, act.account, true, 0, 0 );
          }
       }
 
       if( delay == fc::microseconds() ) {
          for( const auto& act : trx.actions ) {
-            trace->action_traces.emplace_back();
-            dispatch_action( trace->action_traces.back(), act );
+            schedule_action( act, act.account, false, 0, 0 );
          }
-      } else {
+      }
+
+      auto& action_traces = trace->action_traces;
+      uint32_t num_original_actions_to_execute = action_traces.size();
+      for( uint32_t i = 1; i <= num_original_actions_to_execute; ++i ) {
+         execute_action( i, 0 );
+      }
+
+      if( delay != fc::microseconds() ) {
          schedule_transaction();
       }
    }
@@ -406,7 +460,7 @@ namespace bacc = boost::accumulators;
 
       update_billed_cpu_time( now );
 
-      validate_cpu_usage_to_bill( billed_cpu_time_us );
+      validate_cpu_usage_to_bill( billed_cpu_time_us, account_cpu_limit, true );
 
       rl.add_transaction_usage( bill_to_accounts, static_cast<uint64_t>(billed_cpu_time_us), net_usage,
                                 block_timestamp_type(control.pending_block_time()).slot ); // Should never fail
@@ -497,7 +551,7 @@ namespace bacc = boost::accumulators;
       _deadline_timer.start(_deadline);
    }
 
-   void transaction_context::validate_cpu_usage_to_bill( int64_t billed_us, bool check_minimum )const {
+   void transaction_context::validate_cpu_usage_to_bill( int64_t billed_us, int64_t account_cpu_limit, bool check_minimum )const {
       if (!control.skip_trx_checks()) {
          if( check_minimum ) {
             const auto& cfg = control.get_global_properties().configuration;
@@ -507,25 +561,35 @@ namespace bacc = boost::accumulators;
                       );
          }
 
-         if( billing_timer_exception_code == block_cpu_usage_exceeded::code_value ) {
+         validate_account_cpu_usage( billed_us, account_cpu_limit, false );
+      }
+   }
+
+   void transaction_context::validate_account_cpu_usage( int64_t billed_us, int64_t account_cpu_limit, bool estimate )const {
+      if( (billed_us > 0) && !control.skip_trx_checks() ) {
+         const bool cpu_limited_by_account = (account_cpu_limit <= objective_duration_limit.count());
+
+         if( !cpu_limited_by_account && (billing_timer_exception_code == block_cpu_usage_exceeded::code_value) ) {
             EOS_ASSERT( billed_us <= objective_duration_limit.count(),
                         block_cpu_usage_exceeded,
-                        "billed CPU time (${billed} us) is greater than the billable CPU time left in the block (${billable} us)",
-                        ("billed", billed_us)("billable", objective_duration_limit.count())
-                      );
+                        "${desc} CPU time (${billed} us) is greater than the billable CPU time left in the block (${billable} us)",
+                        ("desc", (estimate ? "estimated" : "billed"))("billed", billed_us)( "billable", objective_duration_limit.count() )
+            );
          } else {
-            if (cpu_limit_due_to_greylist) {
-               EOS_ASSERT( billed_us <= objective_duration_limit.count(),
+            if( cpu_limit_due_to_greylist && cpu_limited_by_account ) {
+               EOS_ASSERT( billed_us <= account_cpu_limit,
                            greylist_cpu_usage_exceeded,
-                           "billed CPU time (${billed} us) is greater than the maximum greylisted billable CPU time for the transaction (${billable} us)",
-                           ("billed", billed_us)("billable", objective_duration_limit.count())
+                           "${desc} CPU time (${billed} us) is greater than the maximum greylisted billable CPU time for the transaction (${billable} us)",
+                           ("desc", (estimate ? "estimated" : "billed"))("billed", billed_us)( "billable", account_cpu_limit )
                );
             } else {
-               EOS_ASSERT( billed_us <= objective_duration_limit.count(),
+               // exceeds trx.max_cpu_usage_ms or cfg.max_transaction_cpu_usage if objective_duration_limit is greater
+               const int64_t cpu_limit = (cpu_limited_by_account ? account_cpu_limit : objective_duration_limit.count());
+               EOS_ASSERT( billed_us <= cpu_limit,
                            tx_cpu_usage_exceeded,
-                           "billed CPU time (${billed} us) is greater than the maximum billable CPU time for the transaction (${billable} us)",
-                           ("billed", billed_us)("billable", objective_duration_limit.count())
-                        );
+                           "${desc} CPU time (${billed} us) is greater than the maximum billable CPU time for the transaction (${billable} us)",
+                           ("desc", (estimate ? "estimated" : "billed"))("billed", billed_us)( "billable", cpu_limit )
+               );
             }
          }
       }
@@ -558,30 +622,103 @@ namespace bacc = boost::accumulators;
       int64_t account_cpu_limit = large_number_no_overflow;
       bool greylisted_net = false;
       bool greylisted_cpu = false;
+
+      uint32_t specified_greylist_limit = control.get_greylist_limit();
       for( const auto& a : bill_to_accounts ) {
-         bool elastic = force_elastic_limits || !(control.is_producing_block() && control.is_resource_greylisted(a));
-         auto net_limit = rl.get_account_net_limit(a, elastic);
+         uint32_t greylist_limit = config::maximum_elastic_resource_multiplier;
+         if( !force_elastic_limits && control.is_producing_block() ) {
+            if( control.is_resource_greylisted(a) ) {
+               greylist_limit = 1;
+            } else {
+               greylist_limit = specified_greylist_limit;
+            }
+         }
+         auto [net_limit, net_was_greylisted] = rl.get_account_net_limit(a, greylist_limit);
          if( net_limit >= 0 ) {
             account_net_limit = std::min( account_net_limit, net_limit );
-            if (!elastic) greylisted_net = true;
+            greylisted_net |= net_was_greylisted;
          }
-         auto cpu_limit = rl.get_account_cpu_limit(a, elastic);
+         auto [cpu_limit, cpu_was_greylisted] = rl.get_account_cpu_limit(a, greylist_limit);
          if( cpu_limit >= 0 ) {
             account_cpu_limit = std::min( account_cpu_limit, cpu_limit );
-            if (!elastic) greylisted_cpu = true;
+            greylisted_cpu |= cpu_was_greylisted;
          }
       }
+
+      EOS_ASSERT( (!force_elastic_limits && control.is_producing_block()) || (!greylisted_cpu && !greylisted_net),
+                  transaction_exception, "greylisted when not producing block" );
 
       return std::make_tuple(account_net_limit, account_cpu_limit, greylisted_net, greylisted_cpu);
    }
 
-   void transaction_context::dispatch_action( action_trace& trace, const action& a, account_name receiver, bool context_free, uint32_t recurse_depth ) {
-      apply_context  acontext( control, *this, a, recurse_depth );
-      acontext.context_free = context_free;
-      acontext.receiver     = receiver;
-
-      acontext.exec( trace );
+   action_trace& transaction_context::get_action_trace( uint32_t action_ordinal ) {
+      EOS_ASSERT( 0 < action_ordinal && action_ordinal <= trace->action_traces.size() ,
+                  transaction_exception,
+                  "action_ordinal ${ordinal} is outside allowed range [1,${max}]",
+                  ("ordinal", action_ordinal)("max", trace->action_traces.size())
+      );
+      return trace->action_traces[action_ordinal-1];
    }
+
+   const action_trace& transaction_context::get_action_trace( uint32_t action_ordinal )const {
+      EOS_ASSERT( 0 < action_ordinal && action_ordinal <= trace->action_traces.size() ,
+                  transaction_exception,
+                  "action_ordinal ${ordinal} is outside allowed range [1,${max}]",
+                  ("ordinal", action_ordinal)("max", trace->action_traces.size())
+      );
+      return trace->action_traces[action_ordinal-1];
+   }
+
+   uint32_t transaction_context::schedule_action( const action& act, account_name receiver, bool context_free,
+                                                  uint32_t creator_action_ordinal,
+                                                  uint32_t closest_unnotified_ancestor_action_ordinal )
+   {
+      uint32_t new_action_ordinal = trace->action_traces.size() + 1;
+
+      trace->action_traces.emplace_back( *trace, act, receiver, context_free,
+                                         new_action_ordinal, creator_action_ordinal,
+                                         closest_unnotified_ancestor_action_ordinal );
+
+      return new_action_ordinal;
+   }
+
+   uint32_t transaction_context::schedule_action( action&& act, account_name receiver, bool context_free,
+                                                  uint32_t creator_action_ordinal,
+                                                  uint32_t closest_unnotified_ancestor_action_ordinal )
+   {
+      uint32_t new_action_ordinal = trace->action_traces.size() + 1;
+
+      trace->action_traces.emplace_back( *trace, std::move(act), receiver, context_free,
+                                         new_action_ordinal, creator_action_ordinal,
+                                         closest_unnotified_ancestor_action_ordinal );
+
+      return new_action_ordinal;
+   }
+
+   uint32_t transaction_context::schedule_action( uint32_t action_ordinal, account_name receiver, bool context_free,
+                                                  uint32_t creator_action_ordinal,
+                                                  uint32_t closest_unnotified_ancestor_action_ordinal )
+   {
+      uint32_t new_action_ordinal = trace->action_traces.size() + 1;
+
+      trace->action_traces.reserve( new_action_ordinal );
+
+      const action& provided_action = get_action_trace( action_ordinal ).act;
+
+      // The reserve above is required so that the emplace_back below does not invalidate the provided_action reference.
+
+      trace->action_traces.emplace_back( *trace, provided_action, receiver, context_free,
+                                         new_action_ordinal, creator_action_ordinal,
+                                         closest_unnotified_ancestor_action_ordinal );
+
+      return new_action_ordinal;
+   }
+
+   void transaction_context::execute_action( uint32_t action_ordinal, uint32_t recurse_depth ) {
+      apply_context acontext( control, *this, action_ordinal, recurse_depth );
+      acontext.exec();
+   }
+
 
    void transaction_context::schedule_transaction() {
       // Charge ahead of time for the additional net usage needed to retire the delayed transaction
@@ -592,7 +729,7 @@ namespace bacc = boost::accumulators;
                          + static_cast<uint64_t>(config::transaction_id_net_usage) ); // Will exit early if net usage cannot be payed.
       }
 
-      auto first_auth = trx.first_authorizor();
+      auto first_auth = trx.first_authorizer();
 
       uint32_t trx_size = 0;
       const auto& cgto = control.mutable_db().create<generated_transaction_object>( [&]( auto& gto ) {
@@ -606,7 +743,9 @@ namespace bacc = boost::accumulators;
         trx_size = gto.set( trx );
       });
 
-      add_ram_usage( cgto.payer, (config::billable_size_v<generated_transaction_object> + trx_size) );
+      int64_t ram_delta = (config::billable_size_v<generated_transaction_object> + trx_size);
+      add_ram_usage( cgto.payer, ram_delta );
+      trace->account_ram_delta = account_delta( cgto.payer, ram_delta );
    }
 
    void transaction_context::record_transaction( const transaction_id_type& id, fc::time_point_sec expire ) {
@@ -648,7 +787,7 @@ namespace bacc = boost::accumulators;
             EOS_ASSERT( actor  != nullptr, transaction_exception,
                         "action's authorizing actor '${account}' does not exist", ("account", auth.actor) );
             EOS_ASSERT( auth_manager.find_permission(auth) != nullptr, transaction_exception,
-                        "action's authorizations include a non-existent permission: {permission}",
+                        "action's authorizations include a non-existent permission: ${permission}",
                         ("permission", auth) );
             if( enforce_actor_whitelist_blacklist )
                actors.insert( auth.actor );
@@ -661,25 +800,29 @@ namespace bacc = boost::accumulators;
       }
    }
 
+///@{
+/// HAYA: [cyb-280] add tx sponsorship
+/// HAYA: use decompose for trx extension
 #ifdef ENABLE_TX_SPONSORSHIP
    fc::optional<account_name> transaction_context::get_sponsor() const {
       if (!trx.transaction_extensions.size()) {
          return {};
       }
 
-      auto sponsor_ext_itr = std::find_if(trx.transaction_extensions.begin(), trx.transaction_extensions.end(),
-      [](const extension_type& ext) {
-         return static_cast<trx_extension_type>(ext.type) == trx_extension_type::sponsor;
-      });
+      auto exts = trx.validate_and_extract_extensions();
 
-      if (sponsor_ext_itr != trx.transaction_extensions.end()) {
-         auto sponsor_ext = fc::raw::unpack<trx_sponsor_ext>(sponsor_ext_itr->data);
-         return sponsor_ext.sponsor;
+      auto ext_itr = std::find_if(exts.begin(), exts.end(),
+         [](const auto& ext) {
+            return ext.which() == trx_sponsor_ext::extension_id();
+         });
+
+      if (ext_itr != exts.end()) {
+         return ext_itr->get<trx_sponsor_ext>().sponsor;
       }
 
       return {};
    }
 #endif
-
+///@}
 
 } } /// eosio::chain
