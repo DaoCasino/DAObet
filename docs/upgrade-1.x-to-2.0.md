@@ -1,6 +1,15 @@
 # Guide to upgrade daobet node from 1.x to 2.0
 
-Please, read this guide carefully before performing any actions.
+### !! Please, read this guide carefully before performing any actions.
+
+#### In order to upgrade DAOBet blockchain we should take following general steps:
+1) Validators deploy DAOBet 2.0.1 non-producing (seed) node and configure feature activation time as coordinated with other Validators.
+2) Wait for syncing from the network or run with the snapshot from eossweden's storage: [mainnet](https://snapshots.daobet.eossweden.org/)/[testnet](https://snapshots.daobet-test.eossweden.org/).
+3) Ensure that the node is fully synced and recieves new blocks.
+4) Turn off 1.x production node and switch DAOBet 2.0.1 node to production mode at least for a couple of days before scheduled feature activation date and closely monitor block production and finality.
+5) After the scheduled feature activation date DAOBet team will trigger features activation and the blockchain will be successfuly upgraded.
+
+#### Please see an Example of an upgrade process below:
 
 Here, `data_dir` variable is a path to you `data` directory (contains `blocks`, `state`, and other files and
 directories).
@@ -33,7 +42,7 @@ directories).
     "dependencies": [],
     "description_digest": "64fe7df32e9b86be2b296b3f81dfd527f84e82b98e363bc97e40bc7a83733310",
     "subjective_restrictions": {
-      "earliest_allowed_activation_time": "1970-01-01T00:00:00.000",
+      "earliest_allowed_activation_time": "2020-06-29T13:00:00.000",
       "preactivation_required": false,
       "enabled": true
     },
@@ -49,23 +58,14 @@ directories).
   for the `PREACTIVATE_FEATURE` on their BP nodes, the network will be safe from any attempts at premature activation by
   some other active BPs.
 
-  After the agreed upon time has passed, any of the active block producers can activate the `PREACTIVATE_FEATURE`
-  protocol feature with a simple request sent to the `producer_api_plugin` of their BP node:
-  ```
-  curl -X POST http://127.0.0.1:8888/v1/producer/schedule_protocol_feature_activations \
-    -d '{"protocol_features_to_activate": ["0ec7e080177b2c02b278d5088611686b49d739925a92d9bfcacd7fc6b74053bd"]}'
-  ```
-
-  (See https://developers.eos.io/manuals/eos/latest/nodeos/upgrade-guides/1.8-upgrade-guide for detals.)
-
 * Update the daobet software installation either by your system package manager, or by pulling a docker image:
   ```
-  dpkg -i daobet_2.0.0-1_amd64.deb
+  dpkg -i daobet_2.0.1-1_amd64.deb
   # OR
-  docker pull daocasino/daobet:v2.0.0-rc2
+  docker pull daocasino/daobet:v2.0.1
   ```
 
 * Don't forget to enable block production either by setting `pause-on-startup` config option to `false` (before node
   run), or by performing a HTTP GET-request to http://localhost:8888/v1/producer/resume (after node run).
 
-* Run node (verson 2.0.0).
+* Run node (verson 2.0.x).

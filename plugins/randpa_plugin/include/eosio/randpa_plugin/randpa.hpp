@@ -222,7 +222,7 @@ public:
     }
 
     randpa& set_signature_providers(const std::vector<signature_provider_type>& signature_providers,
-                                    const std::vector<public_key_type>&         public_keys) {
+                                    const std::vector<public_key_type>& public_keys) {
         FC_ASSERT(_is_block_producer, "failed adding signature provider to the full node; use --producer-name option");
         if (!_is_bp_key_provided) {
             // no need to explicitly clear _signature_providers and _public_keys,
@@ -571,6 +571,11 @@ private:
         const auto& proof = msg.data;
         randpa_dlog("Received proof for round ${num}", ("num", proof.round_num));
 
+        if (_is_syncing || _is_frozen) {
+            randpa_dlog("Skipping proof while syncing or frozen");
+            return;
+        }
+
         if (_last_prooved_block_num >= get_block_num(proof.best_block)) {
             randpa_dlog("Skipping proof for ${id} cause last prooved block ${lpb} is higher",
                 ("id", proof.best_block)
@@ -654,8 +659,9 @@ private:
         _is_syncing = event.sync;
         _is_frozen = get_block_num(event.block_id) - get_block_num(_lib) > _max_finality_lag_blocks;
 
-        if (event.sync) {
-            randpa_ilog("Randpa omit block while syncing, id: ${id}", ("id", event.block_id));
+        // when node in syncing or frozen state it's useless to creating new rounds
+        if (_is_syncing || _is_frozen) {
+            randpa_ilog("Randpa omit block while syncing or frozen, id: ${id}", ("id", event.block_id));
             return;
         }
 

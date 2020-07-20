@@ -106,7 +106,12 @@ public:
     }
 
     void remove_confirmations() {
-        _remove_confirmations(root);
+        // walking through weak block index (it's faster and safer then recursive DFS)
+        for (auto&& node_pair: block_index) {
+            if (!node_pair.second.expired()) {
+                node_pair.second.lock()->confirmation_data.clear();
+            }
+        }
     }
 
     void insert(const chain_type& chain,
@@ -250,16 +255,6 @@ private:
         }
 
         return max_conf_node;
-    }
-
-    void _remove_confirmations(node_ptr root) {
-        if (!root) {
-            return;
-        }
-        root->confirmation_data.clear();
-        for (const auto& node : root->adjacent_nodes) {
-            _remove_confirmations(node);
-        }
     }
 };
 

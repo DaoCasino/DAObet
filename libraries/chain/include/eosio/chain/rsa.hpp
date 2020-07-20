@@ -43,7 +43,7 @@ namespace fc {
 
         ~rsa_public_key() {
             if (rsa) {
-                delete rsa;
+                RSA_free(rsa);
             }
         }
 

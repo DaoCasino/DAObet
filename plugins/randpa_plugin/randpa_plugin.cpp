@@ -76,7 +76,7 @@ public:
         _on_accepted_block_handle = app().get_channel<channels::accepted_block>()
             .subscribe( [ev_ch, this]( block_state_ptr s ) {
                 app().get_plugin<telemetry_plugin>().update_gauge("randpa_queue_size", _randpa.get_message_queue().size());
-                app().get_plugin<telemetry_plugin>().update_gauge("head_block_num", get_block_num(_randpa.get_prefix_tree()->get_head()->block_id));
+                app().get_plugin<telemetry_plugin>().update_gauge("head_block_num", app().get_plugin<chain_plugin>().chain().head_block_num());
                 ev_ch->send(randpa_event { on_accepted_block_event {
                     s->id,
                     s->header.previous,

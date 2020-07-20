@@ -47,7 +47,10 @@ static inline auto get_priv_key() {
 
 //---------- types ----------//
 
-enum class node_type {BP, FN};
+enum class node_type_t { BP, FN };
+
+using node_types_t = std::vector<node_type_t>;
+
 
 class Clock {
 public:
@@ -95,12 +98,29 @@ struct Task {
     };
     task_type type = GENERAL;
 
+    ///
+
+    std::string type_str() const {
+        switch (type) {
+        case STOP:         return "STOP";
+        case UPDATE_DELAY: return "UPDATE_DELAY";
+        case SYNC:         return "SYNC";
+        case CREATE_BLOCK: return "CREATE_BLOCK";
+        case RELAY_BLOCK:  return "RELAY_BLOCK";
+        case NETWORK_MSG:  return "NETWORK_MSG";
+        case GENERAL:      return "GENERAL";
+        default:           return "<unknown>";
+        }
+    }
+
     bool operator<(const Task& task) const {
         return at > task.at || (at == task.at && type > task.type);
     }
 };
 
 using matrix_type = std::vector<std::vector<int>>;
+
+/// Weighted adjacency matrix.
 using graph_type = std::vector<std::vector<std::pair<int, int>>>;
 
 class Network {
@@ -129,7 +149,7 @@ private:
 class Node {
 public:
     const uint32_t id;
-    const node_type type;
+    const node_type_t type;
 
     Network net;
     fork_db db;
@@ -140,7 +160,7 @@ public:
     //
 
     Node() = delete;
-    explicit Node(uint32_t id, node_type type, Network && net, fork_db&& db, private_key_type private_key)
+    explicit Node(uint32_t id, node_type_t type, Network && net, fork_db&& db, private_key_type private_key)
         : id{id}, type{type}, net{std::move(net)}, db{std::move(db)}, private_key{std::move(private_key)}
     {}
     virtual ~Node() = default;
@@ -242,7 +262,7 @@ public:
         count_dist_matrix();
     }
 
-    void load_nodetypes(const std::vector<node_type>& tnodes) {
+    void load_nodetypes(const node_types_t& tnodes) {
         nodetypes = tnodes;
     }
 
@@ -314,7 +334,7 @@ public:
     vector<int> get_bp_list() {
         vector<int> bp_list;
         for(int i = 0; i < nodetypes.size(); ++i) {
-            if(nodetypes[i] == node_type::BP) {
+            if(nodetypes[i] == node_type_t::BP) {
                 bp_list.push_back(i);
             }
         }
@@ -392,7 +412,7 @@ public:
         for (uint32_t to = 0; to < get_instances(); to++) {
             if (from != to && dist_matrix[from][to] != -1) {
                 Task task{from, to, clock.now() + dist_matrix[from][to]};
-                task.cb = [chain=chain](NodePtr node) {
+                task.cb = [chain](NodePtr node) {
                     node->apply_chain(chain);
                 };
                 task.type = Task::RELAY_BLOCK;
@@ -415,12 +435,12 @@ public:
             }
         }
         task.at = clock.now() + dist_matrix[node->id][best_peer->id];
-        task.cb = [best_peer](NodePtr node) {
-            logger << "[Node #" << node->id << "]" " Executing sync " << std::endl;
+        task.cb = [=](NodePtr node) {
+            logger << "[Node #" << node->id << "] Executing sync " << std::endl;
             const auto& peer_db = best_peer->db;
             auto& node_db = node->db;
             // sync done
-            logger << "[Node #" << node->id << "]" " best_peer=" << best_peer->id << std::endl;
+            logger << "[Node #" << node->id << "] best_peer=" << best_peer->id << std::endl;
 
             // Copy fork_db and restart
             node_db.set_root(deep_copy(peer_db.get_root()));
@@ -430,7 +450,7 @@ public:
             auto& pending_chains = node->pending_chains;
             while (!pending_chains.empty()) {
                 auto chain = pending_chains.front();
-                logger << "[Node #" << node->id << "]" " Applying chain " << chain << std::endl;
+                logger << "[Node #" << node->id << "] Applying chain " << chain << std::endl;
                 pending_chains.pop();
                 if (!node->apply_chain(chain)) {
                     break;
@@ -442,15 +462,26 @@ public:
     };
 
     template <typename TNode>
-    void run() {
-        init_nodes<TNode>(get_instances());
-        init_connections();
-        assert(get_bp_list().size() != 0);
-        add_schedule_task(schedule_time);
-        run_loop();
+    void init_nodes(uint32_t count) {
+        nodes.clear();
+        for (auto i = 0; i < count; ++i) {
+            // See https://bit.ly/2Wp3Nsf
+            auto conf_number = 2 * blocks_per_slot * bft_threshold();
+            auto node = get_initialized_node<TNode>(i, conf_number);
+            nodes.push_back(node);
+            if (nodetypes[i] == node_type_t::BP) {
+                active_bp_keys.insert(node->private_key.get_public_key());
+            }
+        }
     }
 
-    void run_with_initialized_nodes() {
+    template <typename TNode>
+    void run() {
+        init_nodes<TNode>(get_instances());
+        run_initialized_nodes();
+    }
+
+    void run_initialized_nodes() {
         init_connections();
         assert(get_bp_list().size() != 0);
         add_schedule_task(schedule_time);
@@ -458,23 +489,23 @@ public:
     }
 
     void run_loop() {
-        logger << "[TaskRunner] " << "Run loop " << std::endl;
+        logger << "[TaskRunner] Run loop " << std::endl;
         should_stop = false;
         while (!should_stop) {
             auto task = timeline.top();
-            logger << "[TaskRunner] " << "current_time=" << task.at << " schedule_time=" << schedule_time << std::endl;
+            logger << "[TaskRunner] current_time=" << task.at << " schedule_time=" << schedule_time << std::endl;
             timeline.pop();
             clock.set(task.at);
             if (task.to == RUNNER_ID) {
-                logger << "[TaskRunner] Executing task for " << "TaskRunner" << std::endl;
+                logger << "[TaskRunner] Executing task for TaskRunner" << std::endl;
                 task.cb(nullptr);
             } else {
-                logger << "[TaskRunner] Gotta task for " << task.to << std::endl;
+                logger << "[TaskRunner] Gotta task " << task.type_str() << " for " << task.to << std::endl;
                 auto node = nodes[task.to];
                 if (node->should_sync() && task.type != Task::SYNC) {
                     logger << "[TaskRunner] Skipping task cause node is not synchronized" << std::endl;
                 } else {
-                    logger << "[TaskRunner] Executing task " << std::endl;
+                    logger << "[TaskRunner] Executing task ..." << std::endl;
                     task.cb(node);
                 }
                 if (node->should_sync()) {
@@ -541,11 +572,11 @@ public:
     bool should_stop = false;
 
     template<typename TNode>
-    void add_node(int conf_number = 0, node_type type = node_type::BP) {
+    void add_node(int conf_number = 0, node_type_t type = node_type_t::BP) {
         conf_number = !conf_number ? 2 * blocks_per_slot * bft_threshold() : conf_number;
         auto node = get_initialized_node<TNode>(nodes.size(), conf_number);
         nodes.push_back(node);
-        if (type == node_type::BP) {
+        if (type == node_type_t::BP) {
             active_bp_keys.insert(node->private_key.get_public_key());
         }
     }
@@ -564,20 +595,6 @@ private:
         return block_id;
     }
 
-    template <typename TNode>
-    void init_nodes(uint32_t count) {
-        nodes.clear();
-        for (auto i = 0; i < count; ++i) {
-            // See https://bit.ly/2Wp3Nsf
-            auto conf_number = 2 * blocks_per_slot * bft_threshold();
-            auto node = get_initialized_node<TNode>(i, conf_number);
-            nodes.push_back(node);
-            if (nodetypes[i] == node_type::BP) {
-                active_bp_keys.insert(node->private_key.get_public_key());
-            }
-        }
-    }
-
     void init_connections() {
         for (uint32_t from = 0; from < get_instances(); from++) {
             for (uint32_t to = 0; to < get_instances(); to++) {
@@ -591,7 +608,7 @@ private:
     }
 
     void init_runner_data(int instances) {
-        nodetypes.resize(instances, node_type::BP);
+        nodetypes.resize(instances, node_type_t::BP);
         delay_matrix.resize(instances);
 
         for (int i = 0; i < instances; i++) {
@@ -623,7 +640,7 @@ private:
         }
     }
 
-    std::vector<node_type> nodetypes;
+    node_types_t nodetypes;
     std::vector<NodePtr> nodes;
     matrix_type delay_matrix;
     matrix_type dist_matrix;

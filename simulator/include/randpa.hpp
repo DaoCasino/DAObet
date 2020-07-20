@@ -19,7 +19,7 @@ using randpa_ptr = std::unique_ptr<randpa>;
 
 class RandpaNode: public Node {
 public:
-    explicit RandpaNode(uint32_t id, node_type type, Network && net, fork_db && db_, private_key_type private_key)
+    explicit RandpaNode(uint32_t id, node_type_t type, Network && net, fork_db && db_, private_key_type private_key)
         : Node{id, type, std::move(net), std::move(db_), std::move(private_key)}
     {
         init();
@@ -31,6 +31,7 @@ public:
     void init() {
         init_channels();
         init_randpa();
+        fc::logger::update(randpa_logger_name, randpa_logger);
     }
 
     prefix_tree_ptr copy_fork_db() {
@@ -122,7 +123,7 @@ private:
             .set_in_net_channel(in_net_ch)
             .set_out_net_channel(out_net_ch)
             .set_finality_channel(finality_ch);
-        if (type == node_type::BP) {
+        if (type == node_type_t::BP) {
             logger << "[Node] #" << id << ": setting explicit signature provider for BP; "
                 << private_key.get_public_key() << std::endl;
             randpa_impl->set_type_block_producer();

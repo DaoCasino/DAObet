@@ -1,9 +1,12 @@
 #pragma once
 
+#include <fc/log/logger.hpp>
+#include <fc/string.hpp>
+
 namespace randpa_finality {
 
-const fc::string randpa_logger_name("randpa_plugin");
-fc::logger randpa_logger;
+extern const fc::string randpa_logger_name;
+extern fc::logger randpa_logger;
 
 #define randpa_dlog(FORMAT, ...) \
     FC_MULTILINE_MACRO_BEGIN \
@@ -28,4 +31,5 @@ fc::logger randpa_logger;
         if (randpa_logger.is_enabled(fc::log_level::error)) \
             randpa_logger.log( FC_LOG_MESSAGE(error, FORMAT, __VA_ARGS__)); \
     FC_MULTILINE_MACRO_END
+
 } // randpa_finality

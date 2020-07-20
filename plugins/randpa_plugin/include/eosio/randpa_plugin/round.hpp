@@ -94,12 +94,19 @@ public:
             return;
         }
 
-        if (!validate_prevote(msg)) {
-            randpa_dlog("Invalid prevote for round ${num}", ("num", num));
-            return;
-        }
+        const auto& msg_signatures = msg.signatures;
+        const auto& msg_pub_keys = msg.public_keys();
 
-        add_prevote(msg);
+        // split msg with n keys (n >= 1) into n msg's with a single key each
+        // in order to validate and add prevote for each key independenlty
+        for (size_t i = 0; i < msg_signatures.size(); i++) {
+            if (!validate_prevote(msg, msg_pub_keys[i])) {
+                randpa_dlog("Invalid prevote for round ${num}", ("num", num));
+                continue;
+            }
+            // use msg with a single key
+            add_prevote(prevote_msg(msg.data, { msg_signatures[i] }));
+        }
     }
 
     void on(const precommit_msg& msg) {
@@ -108,12 +115,18 @@ public:
             return;
         }
 
-        if (!validate_precommit(msg)) {
-            randpa_dlog("Invalid precommit for round ${num}", ("num", num));
-            return;
-        }
+        const auto& msg_signatures = msg.signatures;
+        const auto& msg_pub_keys = msg.public_keys();
 
-        add_precommit(msg);
+        // see on(prevote_msg&) handler
+        for (size_t i = 0; i < msg_signatures.size(); i++) {
+            if (!validate_precommit(msg, msg_pub_keys[i])) {
+                randpa_dlog("Invalid precommit for round ${num}", ("num", num));
+                continue;
+            }
+            auto msg_with_single_key = precommit_msg(msg.data, { msg_signatures[i] });
+            add_precommit(msg_with_single_key);
+        }
     }
 
     void end_prevote() {
@@ -155,18 +168,19 @@ private:
         state = state_type::prevote;
 
         auto last_node = tree->get_last_inserted_block(primary);
-
         if (!last_node) {
             randpa_wlog("Not found last node in tree for primary, primary: ${p}", ("p", primary));
             return;
         }
-
         auto chain = tree->get_branch(last_node->block_id);
 
         auto prevote = prevote_type { num, chain.base_block, std::move(chain.blocks) };
-        auto msg = prevote_msg(prevote, signature_providers);
-        add_prevote(msg);
-        prevote_bcaster(msg);
+
+        for (const auto& sig_prov : signature_providers) {
+            auto msg = prevote_msg(prevote, { sig_prov });
+            add_prevote(msg);
+        }
+        prevote_bcaster(prevote_msg(prevote, signature_providers));
     }
 
     void precommit() {
@@ -174,14 +188,15 @@ private:
         state = state_type::precommit;
 
         auto precommit = precommit_type { num, best_node->block_id };
-        auto msg = precommit_msg(precommit, signature_providers);
 
-        add_precommit(msg);
-
-        precommit_bcaster(msg);
+        for (const auto& sig_prov : signature_providers) {
+            auto msg = precommit_msg(precommit, { sig_prov });
+            add_precommit(msg);
+        }
+        precommit_bcaster(precommit_msg(precommit, signature_providers));
     }
 
-    bool validate_prevote(const prevote_msg& msg) {
+    bool validate_prevote(const prevote_msg& msg, const public_key_type& key) {
         if (num != msg.data.round_num) {
             randpa_dlog("Randpa received prevote for wrong round, received for: ${rr}, expected: ${er}",
                        ("rr", msg.data.round_num)
@@ -190,11 +205,9 @@ private:
             return false;
         }
 
-        for (const auto& public_key : msg.public_keys()) {
-            if (prevoted_keys.count(public_key)) {
-                randpa_dlog("Randpa received prevote second time for key");
-                return false;
-            }
+        if (prevoted_keys.count(key)) {
+            randpa_dlog("Randpa received prevote second time for key ${k}", ("k", key));
+            return false;
         }
 
         auto node = find_last_node(msg.data.base_block, msg.data.blocks);
@@ -204,19 +217,17 @@ private:
             return false;
         }
 
-        for (const auto& public_key : msg.public_keys()) {
-            if (!node->active_bp_keys.count(public_key)) {
-                randpa_dlog("Randpa received prevote for block from not active producer, id : ${id}",
-                           ("id", node->block_id)
-                );
-                return false;
-            }
+        if (!node->active_bp_keys.count(key)) {
+            randpa_dlog("Randpa received prevote for block from not active producer, id : ${id}",
+                       ("id", node->block_id)
+            );
+            return false;
         }
 
         return true;
     }
 
-    bool validate_precommit(const precommit_msg& msg) {
+    bool validate_precommit(const precommit_msg& msg, const public_key_type& key) {
         if (num != msg.data.round_num) {
             randpa_dlog("Randpa received precommit for wrong round, received for: ${rr}, expected: ${er}",
                        ("rr", msg.data.round_num)
@@ -225,11 +236,9 @@ private:
             return false;
         }
 
-        for (const auto& public_key : msg.public_keys()) {
-            if (precommited_keys.count(public_key)) {
-                randpa_dlog("Randpa received precommit second time for key");
-                return false;
-            }
+        if (precommited_keys.count(key)) {
+            randpa_dlog("Randpa received precommit second time for key");
+            return false;
         }
 
         if (msg.data.block_id != best_node->block_id) {
@@ -240,62 +249,60 @@ private:
             return false;
         }
 
-        for (const auto& public_key : msg.public_keys()) {
-            if (!best_node->has_confirmation(public_key)) {
-                randpa_dlog("Randpa received precommit from not prevoted peer");
-                return false;
-            }
+        if (!best_node->has_confirmation(key)) {
+            randpa_dlog("Randpa received precommit from not prevoted peer: ${k}", ("k", key));
+            return false;
         }
 
         return true;
     }
 
     void add_prevote(const prevote_msg& msg) {
-        auto public_keys = msg.public_keys();
-        for (const auto& public_key : public_keys) {
-            auto max_prevote_node = tree->add_confirmations({ msg.data.base_block, msg.data.blocks },
-                                    public_key, std::make_shared<prevote_msg>(msg));
+        const auto pub_keys = msg.public_keys();
+        FC_ASSERT(pub_keys.size() == 1, "invalid number of public keys in msg; should be 1");
+        const public_key_type& key = pub_keys[0];
 
-            FC_ASSERT(max_prevote_node, "confirmation should be insertable");
+        auto max_prevote_node = tree->add_confirmations(
+            { msg.data.base_block, msg.data.blocks }, key, std::make_shared<prevote_msg>(msg));
 
-            prevoted_keys.insert(public_key);
-            randpa_dlog("Prevote inserted, round: ${r}, from: ${f}, max_confs: ${c}",
+        FC_ASSERT(max_prevote_node, "confirmation should be insertable");
+
+        prevoted_keys.insert(key);
+        randpa_dlog("Prevote inserted, round: ${r}, from: ${f}, max_confs: ${c}",
+                   ("r", num)
+                   ("f", key)
+                   ("c", max_prevote_node->confirmation_number())
+        );
+
+        if (state != state_type::ready_to_precommit && is_prevote_threshold_reached(max_prevote_node)) {
+            state = state_type::ready_to_precommit;
+            best_node = max_prevote_node;
+            randpa_dlog("Prevote threshold reached, round: ${r}, best block: ${b}",
                        ("r", num)
-                       ("f", public_key)
-                       ("c", max_prevote_node->confirmation_number())
+                       ("b", best_node->block_id)
             );
-
-            if (has_threshold_prevotes(max_prevote_node)) {
-                state = state_type::ready_to_precommit;
-                best_node = max_prevote_node;
-                randpa_dlog("Prevote threshold reached, round: ${r}, best block: ${b}",
-                           ("r", num)
-                           ("b", best_node->block_id)
-                );
-                return;
-            }
         }
     }
 
     void add_precommit(const precommit_msg& msg) {
-        for (const auto& public_key : msg.public_keys()) {
-            precommited_keys.insert(public_key);
-            proof.precommits.push_back(msg);
+        FC_ASSERT(msg.public_keys().size() == 1, "invalid number of public keys in msg; should be 1");
 
-            randpa_dlog("Precommit inserted, round: ${r}, from: ${f}",
+        const auto key = msg.public_keys()[0];
+        precommited_keys.insert(key);
+        proof.precommits.push_back(msg);
+
+        randpa_dlog("Precommit inserted, round: ${r}, from: ${f}",
+                   ("r", num)
+                   ("f", key)
+        );
+
+        if (state != state_type::done && is_precommit_threshold_reached()) {
+            randpa_dlog("Precommit threshold reached, round: ${r}, best block: ${b}",
                        ("r", num)
-                       ("f", public_key)
+                       ("b", best_node->block_id)
             );
-
-            if (proof.precommits.size() > 2 * best_node->active_bp_keys.size() / 3) {
-                randpa_dlog("Precommit threshold reached, round: ${r}, best block: ${b}",
-                           ("r", num)
-                           ("b", best_node->block_id)
-                );
-                state = state_type::done;
-                done_cb();
-                return;
-            }
+            state = state_type::done;
+            done_cb();
         }
     }
 
@@ -312,8 +319,12 @@ private:
         return tree->find(*block_itr);
     }
 
-    bool has_threshold_prevotes(const tree_node_ptr& node) {
+    static bool is_prevote_threshold_reached(const tree_node_ptr& node) {
         return node->confirmation_number() > 2 * node->active_bp_keys.size() / 3;
+    }
+
+    bool is_precommit_threshold_reached() const {
+        return proof.precommits.size() > 2 * best_node->active_bp_keys.size() / 3;
     }
 };
 

@@ -121,7 +121,7 @@ endif()
 
 set(Boost_USE_STATIC_LIBS ON CACHE STRING "ON or OFF")
 set(Boost_NO_BOOST_CMAKE ON CACHE STRING "ON or OFF") #TODO: Remove after Boost 1.70 CMake fixes are in place
-find_package(Boost 1.67 REQUIRED COMPONENTS
+find_package(Boost 1.70 REQUIRED COMPONENTS
   date_time
   filesystem
   system
@@ -130,11 +130,6 @@ find_package(Boost 1.67 REQUIRED COMPONENTS
   unit_test_framework
   iostreams
 )
-
-# Some new stdlibc++s will #error on <experimental/string_view>; a problem for boost pre-1.69
-if(APPLE)
-   add_definitions(-DBOOST_ASIO_DISABLE_STD_EXPERIMENTAL_STRING_VIEW)
-endif()
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
