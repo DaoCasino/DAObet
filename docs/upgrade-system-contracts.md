@@ -57,9 +57,9 @@ following:
 
 Then each of the top block producers should do the following:
 
-5. Compare their generated `upgrade_system_contract_official_trx.json` file with the
-   `upgrade_system_contract_official_trx.json` provided by the lead producer. The only difference should be in
-   expiration, `ref_block_num`, `ref_block_prefix`, for example
+5. Compare their generated `upgrade_system_contract_trx.json` file with the `upgrade_system_contract_official_trx.json`
+   provided by the lead producer. The only difference should be in expiration, `ref_block_num`, `ref_block_prefix`, for
+   example
    ```
    $ diff upgrade_system_contract_official_trx.json upgrade_system_contract_trx.json
    2,4c2,4
@@ -88,7 +88,7 @@ Then each of the top block producers should do the following:
    when prompted):
    ```
    $ daobet-cli sign --chain-id d0242fb30b71b82df9966d10ff6d09e4f5eb6be7ba85fd78f796937f1959315e
-   upgrade_system_contract_trx.json | tail -n5
+   upgrade_system_contract_official_trx.json | tail -n5
      private key:   "signatures": [
        "SIG_K1_JzABB9gzDGwUHaRmox68UNcfxMVwMnEXqqS1MvtsyUX8KGTbsZ5aZQZjHD5vREQa5BkZ7ft8CceLBLAj8eZ5erZb9cHuy5"
      ],
