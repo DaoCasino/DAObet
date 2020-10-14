@@ -28,6 +28,7 @@ RUN \
     /var/lib/apt/lists/*
 
 
+# TODO: install release daobet version via deb package from github
 FROM node-build-env AS node-with-cdt
 ARG project
 COPY . /work/${project}
