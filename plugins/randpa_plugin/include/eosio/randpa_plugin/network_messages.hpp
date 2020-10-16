@@ -17,6 +17,10 @@ public:
     T data;
     std::vector<signature_type> signatures;
 
+private:
+    mutable std::vector<public_key_type> pub_keys_cache;
+
+public:
     //
 
     network_msg() = default;
@@ -38,13 +42,14 @@ public:
     }
 
     std::vector<public_key_type> public_keys() const {
-        std::vector<public_key_type> public_keys;
-        public_keys.reserve(signatures.size());
+        if (pub_keys_cache.empty()) {
+            pub_keys_cache.reserve(signatures.size());
 
-        for (const auto& sign : signatures) {
-            public_keys.push_back(public_key_type(sign, hash()));
+            for (const auto& sign : signatures) {
+                pub_keys_cache.push_back(public_key_type(sign, hash()));
+            }
         }
-        return public_keys;
+        return pub_keys_cache;
     }
 
     bool validate(const std::vector<public_key_type>& pub_keys) const {

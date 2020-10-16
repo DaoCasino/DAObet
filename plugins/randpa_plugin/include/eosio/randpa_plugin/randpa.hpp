@@ -534,7 +534,12 @@ private:
                 precommited_keys.insert(precommiter_pub_key);
             }
         }
-        return precommited_keys.size() > node->active_bp_keys.size() * 2 / 3;
+        bool is_enough_keys = precommited_keys.size() > node->active_bp_keys.size() * 2 / 3;
+        if (!is_enough_keys) {
+            randpa_dlog("Precommit validation failed: not enough keys: have ${have}, need ${need}",
+                ("have", precommited_keys.size())("need", node->active_bp_keys.size() * 2 / 3 + 1));
+        }
+        return is_enough_keys;
     }
 
     void on(uint32_t ses_id, const prevote_msg& msg) {
