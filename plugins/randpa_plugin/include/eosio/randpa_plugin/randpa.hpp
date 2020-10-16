@@ -135,8 +135,8 @@ struct randpa_net_msg {
 struct on_accepted_block_event {
     block_id_type block_id;
     block_id_type prev_block_id;
-    public_key_type creator_key;
-    std::set<public_key_type> active_bp_keys;
+    public_key_type creator_key;              ///< block creator's key
+    std::set<public_key_type> active_bp_keys; ///< keys of BPs, that signed this block
     bool sync;
 };
 
@@ -224,38 +224,27 @@ public:
     randpa& set_signature_providers(const std::vector<signature_provider_type>& signature_providers,
                                     const std::vector<public_key_type>& public_keys) {
         FC_ASSERT(_is_block_producer, "failed adding signature provider to the full node; use --producer-name option");
-        if (!_is_bp_key_provided) {
-            // no need to explicitly clear _signature_providers and _public_keys,
-            // as they are reassigned in the following lines
-            _is_bp_key_provided = true;
-        }
+        FC_ASSERT(signature_providers.size() == public_keys.size(), "number of signature providers and number of public keys differ");
+
         _signature_providers = signature_providers;
         _public_keys = public_keys;
 
+        _sig_provs_by_key.clear();
+        for (size_t i = 0; i < _public_keys.size(); i++) {
+            _sig_provs_by_key[_public_keys[i]] = _signature_providers[i];
+        }
+
         randpa_dlog("set signature providers for ${p}", ("p", public_keys));
         return *this;
-    }
-
-    void add_signature_provider(const signature_provider_type& signature_provider, const public_key_type& public_key) {
-        FC_ASSERT(_is_block_producer, "failed adding signature provider to the full node; use --producer-name option");
-        if (!_is_bp_key_provided) {
-            FC_ASSERT(_signature_providers.size() == 1 && _public_keys.size() == 1,
-                "changing from full-node case was expected");
-            // remove default values, stored for full-node case
-            _signature_providers.clear();
-            _public_keys.clear();
-            _is_bp_key_provided = true;
-        }
-        _signature_providers.push_back(signature_provider);
-        _public_keys.push_back(public_key);
-
-        randpa_dlog("added signature provider for ${p}", ("p", public_key));
     }
 
     void start(prefix_tree_ptr tree) {
         FC_ASSERT(_in_net_channel && _in_event_channel, "input channels should be initialized");
         FC_ASSERT(_out_net_channel, "output channel should be initialized");
         FC_ASSERT(_finality_channel, "finality channel should be initialized");
+        if (_is_block_producer) {
+            FC_ASSERT(!_signature_providers.empty());
+        }
 
         _prefix_tree = tree;
         _lib = tree->get_root()->block_id;
@@ -312,8 +301,10 @@ private:
     std::atomic<bool> _done { false };
     std::vector<signature_provider_type> _signature_providers;
     std::vector<public_key_type> _public_keys;
-    bool _is_bp_key_provided { false };      ///< true if user explicitly set at least one sig provider
-    bool _is_block_producer { false };       ///< node is a block producer if run with --producer-name option
+    /// this hash map allows effectively filter only active BPs among all listed in configuration file
+    /// XXX: cannot use unordered_map until fc::crypto::public_key is not hashable
+    std::map<public_key_type, signature_provider_type> _sig_provs_by_key;
+    bool _is_block_producer { false };       ///< node is a block producer if run with at least one --producer-name option
     prefix_tree_ptr _prefix_tree;
     randpa_round_ptr _round;
     block_id_type _lib;                      ///< last irreversible block
@@ -397,6 +388,19 @@ private:
             return false;
         }
         return true;
+    }
+
+    /// Get intersection of two sets: _signature_providers and active_bp_keys.
+    std::vector<signature_provider_type> get_active_signature_providers(const std::set<public_key_type>& active_bp_keys) const {
+        std::vector<signature_provider_type> active_sig_provs;
+        active_sig_provs.reserve(_signature_providers.size());
+        for (const auto& key : active_bp_keys) {
+            const auto it = _sig_provs_by_key.find(key);
+            if (it != _sig_provs_by_key.end()) {
+                active_sig_provs.push_back(it->second);
+            }
+        }
+        return active_sig_provs;
     }
 
     // need handle all messages
@@ -676,7 +680,7 @@ private:
             randpa_dlog("current round removed");
 
             if (is_active_bp(event.block_id)) {
-                new_round(round_num(event.block_id), event.creator_key);
+                new_round(round_num(event.block_id), event.creator_key, event.active_bp_keys);
                 randpa_dlog("new round (${n}) started", ("n", _round->get_num()));
             }
         }
@@ -774,7 +778,7 @@ private:
     }
 
     bool is_active_bp(const block_id_type& block_id) const {
-        if (!_is_bp_key_provided) {
+        if (!_is_block_producer) {
             return false;
         }
 
@@ -818,8 +822,12 @@ private:
         randpa_dlog("round ${r} finished", ("r", _round->get_num()));
     }
 
-    void new_round(uint32_t round_num, const public_key_type& primary) {
-        _round.reset(new randpa_round(round_num, primary, _prefix_tree, _signature_providers,
+    void new_round(uint32_t round_num, const public_key_type& primary, const std::set<public_key_type>& active_bp_keys) {
+        _round.reset(new randpa_round(
+            round_num,
+            primary,
+            _prefix_tree,
+            get_active_signature_providers(active_bp_keys),
             [this](const prevote_msg& msg) { bcast(msg); },
             [this](const precommit_msg& msg) { bcast(msg); },
             [this]() { finish_round(); }

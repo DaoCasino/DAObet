@@ -602,16 +602,21 @@ TEST(randpa_finality, large_multisig_BP_only) {
         //~const auto& keys = pub_keys[sig_index];
         //~sig_index++;
 
+        std::vector<signature_provider_type> sig_provs;
+        std::vector<public_key_type> pub_keys;
+
         for (size_t i = 1; i < sig_provs_per_node; i++) {
             const auto priv_key = ::get_priv_key();
-            node_ptr->get_randpa().add_signature_provider(
+
+            sig_provs.push_back(
                 [priv_key](const digest_type& digest) {
                     return priv_key.sign(digest);
-                },
-                // some bad publick keys => invalid signature providers
-                (i < 3 ? ::get_priv_key().get_public_key() : priv_key.get_public_key())
+                }
             );
+            // some bad public keys => invalid signature providers
+            pub_keys.push_back(i < 3 ? ::get_priv_key().get_public_key() : priv_key.get_public_key());
         }
+        node_ptr->get_randpa().set_signature_providers(sig_provs, pub_keys);
         //~node_ptr->get_randpa().set_signature_providers(sps, keys);
     }
 

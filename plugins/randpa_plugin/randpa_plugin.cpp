@@ -290,7 +290,11 @@ void randpa_plugin::plugin_initialize(const variables_map& options) {
     if (!options.count("signature-provider")) {
         return;
     }
+
     const auto key_spec_pair_vector = options["signature-provider"].as<vector<std::string>>();
+    std::vector<signature_provider_type> sig_provs;
+    std::vector<public_key_type> pub_keys;
+
     for (const std::string& key_spec_pair : key_spec_pair_vector) {
         try {
             auto delim = key_spec_pair.find("=");
@@ -306,16 +310,18 @@ void randpa_plugin::plugin_initialize(const variables_map& options) {
 
             auto pubkey = public_key_type(pub_key_str);
 
+            pub_keys.push_back(pubkey);
             if (spec_type_str == "KEY") {
-                my->_randpa.add_signature_provider(make_key_signature_provider(private_key_type(spec_data)), pubkey);
+                sig_provs.push_back(make_key_signature_provider(private_key_type(spec_data)));
             } else if (spec_type_str == "KEOSD") {
-                my->_randpa.add_signature_provider(make_keosd_signature_provider(spec_data, pubkey), pubkey);
+                sig_provs.push_back(make_keosd_signature_provider(spec_data, pubkey));
             }
         } catch (const fc::exception &) {
             randpa_elog("Malformed signature provider ${val}", ("val", key_spec_pair));
             return;
         }
     }
+    my->_randpa.set_signature_providers(sig_provs, pub_keys);
 }
 
 void randpa_plugin::plugin_startup() {
