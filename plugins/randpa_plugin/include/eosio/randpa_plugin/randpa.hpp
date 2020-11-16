@@ -221,6 +221,7 @@ public:
         return *this;
     }
 
+    /// Set signature providers.
     randpa& set_signature_providers(const std::vector<signature_provider_type>& signature_providers,
                                     const std::vector<public_key_type>& public_keys) {
         FC_ASSERT(_is_block_producer, "failed adding signature provider to the full node; use --producer-name option");
@@ -234,7 +235,31 @@ public:
             _sig_provs_by_key[_public_keys[i]] = _signature_providers[i];
         }
 
-        randpa_dlog("set signature providers for ${p}", ("p", public_keys));
+        randpa_dlog("set signature providers for producers ${p}", ("p", public_keys));
+        return *this;
+    }
+
+    /// Add signature provider.
+    // XXX: don't use!
+    // TODO: remove after fixing simulator (CYB-573)
+    randpa& add_signature_provider(const signature_provider_type& signature_provider, const public_key_type& public_key) {
+        FC_ASSERT(_is_block_producer, "failed adding signature provider to the full node; use --producer-name option");
+
+        //~if (!_is_bp_key_provided) {
+        //~    FC_ASSERT(_signature_providers.size() == 1 && _public_keys.size() == 1, "changing from full-node case was expected");
+        //~    // remove default values, stored for full-node case
+        //~    _signature_providers.clear();
+        //~    _public_keys.clear();
+        //~    _sig_provs_by_key.clear();
+        //~    _is_bp_key_provided = true;
+        //~}
+
+        _signature_providers.push_back(signature_provider);
+        _public_keys.push_back(public_key);
+
+        _sig_provs_by_key[public_key] = signature_provider;
+
+        randpa_dlog("set signature provider for producer ${p}", ("p", public_key));
         return *this;
     }
 
@@ -298,25 +323,27 @@ private:
     static constexpr int32_t _max_finality_lag_blocks = 69 * 12 * 2 * 2;
 
     std::unique_ptr<std::thread> _thread_ptr;
-    std::atomic<bool> _done { false };
+    std::atomic<bool> _done = false;
     std::vector<signature_provider_type> _signature_providers;
     std::vector<public_key_type> _public_keys;
     /// this hash map allows effectively filter only active BPs among all listed in configuration file
-    /// XXX: cannot use unordered_map until fc::crypto::public_key is not hashable
+    /// XXX: cannot use unordered_map until fc::crypto::public_key is hashable
     std::map<public_key_type, signature_provider_type> _sig_provs_by_key;
-    bool _is_block_producer { false };       ///< node is a block producer if run with at least one --producer-name option
+    // TODO: remove after fixing simulator (CYB-573)
+    //~bool _is_bp_key_provided = false;       ///< true if user explicitly set at least one sig provider
+    bool _is_block_producer = false;        ///< node is a block producer if run with at least one --producer-name option
     prefix_tree_ptr _prefix_tree;
     randpa_round_ptr _round;
-    block_id_type _lib;                      ///< last irreversible block
-    uint32_t _last_prooved_block_num { 0 };
+    block_id_type _lib;                     ///< last irreversible block
+    uint32_t _last_prooved_block_num = 0;
     std::map<public_key_type, uint32_t> _peers;
     lru_cache_type _peer_messages;
     lru_cache_type _self_messages;
     /// Proof data is invalidated after each round is finished, but other nodes will want to request
     /// proofs for that round; this cache holds some proofs to reply such requests.
     boost::circular_buffer<proof_type> _last_proofs;
-    bool _is_syncing { false };              ///< syncing blocks from peers
-    bool _is_frozen { false };               ///< freeze if dpos finality stops working
+    bool _is_syncing = false;               ///< syncing blocks from peers
+    bool _is_frozen = false;                ///< freeze if dpos finality stops working
 
 #ifndef SYNC_RANDPA
     message_queue<randpa_message> _message_queue;
@@ -561,7 +588,7 @@ private:
             randpa_dlog("no need to get finality proof for block producer node");
             return;
         }
-        send(ses_id, finality_req_proof_msg{{data.round_num}, _signature_providers});
+        send(ses_id, finality_req_proof_msg{{data.round_num}, _signature_providers}); // TODO: filter _signature_providers???
     }
 
     void on(uint32_t ses_id, const finality_req_proof_msg& msg) {
@@ -570,7 +597,7 @@ private:
         for (const auto& proof : _last_proofs) {
             if (proof.round_num == data.round_num) {
                 randpa_dlog("proof found; sending it");
-                send(ses_id, proof_msg{proof, _signature_providers});
+                send(ses_id, proof_msg{proof, _signature_providers}); // TODO: see above
                 break;
             }
         }

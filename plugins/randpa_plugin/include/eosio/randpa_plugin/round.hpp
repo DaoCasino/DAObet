@@ -218,8 +218,8 @@ private:
         }
 
         if (!node->active_bp_keys.count(key)) {
-            randpa_dlog("Randpa received prevote for block from not active producer, id : ${id}",
-                       ("id", node->block_id)
+            randpa_dlog("Randpa received prevote for block ${b} from not active producer ${p}",
+                ("b", node->block_id)("p", key)
             );
             return false;
         }
@@ -237,7 +237,7 @@ private:
         }
 
         if (precommited_keys.count(key)) {
-            randpa_dlog("Randpa received precommit second time for key");
+            randpa_dlog("Randpa received precommit second time for key ${k}", ("k", key));
             return false;
         }
 
@@ -250,7 +250,8 @@ private:
         }
 
         if (!best_node->has_confirmation(key)) {
-            randpa_dlog("Randpa received precommit from not prevoted peer: ${k}", ("k", key));
+            randpa_dlog("Randpa received precommit for block ${b} from not prevoted peer: ${k}",
+                ("b", best_node->block_id)("k", key));
             return false;
         }
 

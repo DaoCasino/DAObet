@@ -285,12 +285,9 @@ void randpa_plugin::plugin_initialize(const variables_map& options) {
         // @see plugins/producer_plugin/producer_plugin.cpp
         return;
     }
+    FC_ASSERT(options.count("signature-provider") > 0, "no 'signature-provider' options for a block producer node");
 
     // parse --signature-provider options
-    if (!options.count("signature-provider")) {
-        return;
-    }
-
     const auto key_spec_pair_vector = options["signature-provider"].as<vector<std::string>>();
     std::vector<signature_provider_type> sig_provs;
     std::vector<public_key_type> pub_keys;

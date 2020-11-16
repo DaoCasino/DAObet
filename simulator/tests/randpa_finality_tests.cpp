@@ -543,6 +543,59 @@ TEST(randpa_finality, bp_over_horizontal_lines_fn) {
     }
 }
 
+TEST(randpa_finality, basic_multisig_BP_only) {
+    constexpr size_t n_nodes = 2;
+    constexpr size_t sig_provs_per_node = 2;
+
+    auto runner = TestRunner(n_nodes);
+    runner.load_nodetypes({ BP, BP });
+
+    // topology: segment
+    graph_type g;
+    g.push_back({{ 1, 10 }});
+
+    runner.load_graph(g);
+    runner.add_stop_task(4 * runner.get_slot_ms());
+
+    // initialize nodes
+    runner.init_nodes<RandpaNode>(runner.get_instances());
+
+    // set miltiple signature providers for each node
+    for (const auto& node : runner.get_nodes()) {
+        const auto node_ptr = std::dynamic_pointer_cast<RandpaNode>(node);
+
+        // TODO: use set_signature_providers() after fixing simulator (CYB-573)
+        //~std::vector<signature_provider_type> sig_provs;
+        //~std::vector<public_key_type> pub_keys;
+
+        for (size_t i = 0; i < sig_provs_per_node; i++) {
+            const auto priv_key = ::get_priv_key();
+
+            node_ptr->get_randpa().add_signature_provider(
+                [priv_key](const digest_type& digest) {
+                    return priv_key.sign(digest);
+                },
+                priv_key.get_public_key()
+            );
+
+            //~sig_provs.push_back(
+            //~    [priv_key](const digest_type& digest) {
+            //~        return priv_key.sign(digest);
+            //~    }
+            //~);
+            //~pub_keys.push_back(priv_key.get_public_key());
+        }
+        //~node_ptr->get_randpa().set_signature_providers(sig_provs, pub_keys);
+    }
+
+    // run
+    runner.run_initialized_nodes();
+
+    for (size_t i = 0; i < n_nodes; i++) {
+        EXPECT_EQ(get_block_height(runner.get_db(i).last_irreversible_block_id()), 3);
+    }
+}
+
 TEST(randpa_finality, large_multisig_BP_only) {
     constexpr size_t n_nodes = 6;
     constexpr size_t sig_provs_per_node = 10;
@@ -574,7 +627,7 @@ TEST(randpa_finality, large_multisig_BP_only) {
     //
     // +-- [0] -- [1] -- [2] --+
     // |                       |
-    // +-- [3] -- [4] -- [5] --+
+    // +-- [5] -- [4] -- [3] --+
     graph_type g;
     // TODO: results are somehow unstable on the following set:
     // n_nodes = 6; sig_provs_per_node = 15; deltas = {555, 555, 90, 90, 90, 200}; (i < 12) in the inner loop
@@ -585,7 +638,6 @@ TEST(randpa_finality, large_multisig_BP_only) {
     g.push_back({{ 5, 40 }});
     g.push_back({{ 0, 40 }});
 
-
     runner.load_graph(g);
     runner.add_stop_task(24 * runner.get_slot_ms());
 
@@ -594,36 +646,31 @@ TEST(randpa_finality, large_multisig_BP_only) {
     //~ASSERT_EQ(runner.get_nodes().size(), sig_provs.size());
 
     // set miltiple signature providers for each node
-    //~size_t sig_index = 0;
-    for (const auto node : runner.get_nodes()) {
+    for (const auto& node : runner.get_nodes()) {
         const auto node_ptr = std::dynamic_pointer_cast<RandpaNode>(node);
 
-        //~const auto& sps = sig_provs[sig_index];
-        //~const auto& keys = pub_keys[sig_index];
-        //~sig_index++;
-
-        std::vector<signature_provider_type> sig_provs;
-        std::vector<public_key_type> pub_keys;
+        // TODO: use set_signature_providers() after fixing simulator (CYB-573)
+        //~std::vector<signature_provider_type> sig_provs;
+        //~std::vector<public_key_type> pub_keys;
 
         for (size_t i = 1; i < sig_provs_per_node; i++) {
             const auto priv_key = ::get_priv_key();
 
-            sig_provs.push_back(
+            node_ptr->get_randpa().add_signature_provider(
                 [priv_key](const digest_type& digest) {
                     return priv_key.sign(digest);
-                }
+                },
+                // some bad public keys => invalid signature providers
+                i < 3 ? ::get_priv_key().get_public_key() : priv_key.get_public_key()
             );
-            // some bad public keys => invalid signature providers
-            pub_keys.push_back(i < 3 ? ::get_priv_key().get_public_key() : priv_key.get_public_key());
         }
-        node_ptr->get_randpa().set_signature_providers(sig_provs, pub_keys);
-        //~node_ptr->get_randpa().set_signature_providers(sps, keys);
+        //~node_ptr->get_randpa().set_signature_providers(sig_provs, pub_keys);
     }
 
     // run
     runner.run_initialized_nodes();
 
     for (size_t i = 0; i < n_nodes; i++) {
-        EXPECT_EQ(get_block_height(runner.get_db(0).last_irreversible_block_id()), 23);
+        EXPECT_EQ(get_block_height(runner.get_db(i).last_irreversible_block_id()), 23);
     }
 }
