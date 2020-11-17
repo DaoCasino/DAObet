@@ -468,7 +468,7 @@ private:
 
     void process_net_msg(const randpa_net_msg& msg) {
         if (fc::time_point::now() - msg.receive_time > fc::milliseconds(msg_expiration_ms)) {
-            randpa_wlog("Network message dropped, msg age: ${age}", ("age", fc::time_point::now() - msg.receive_time));
+            randpa_dlog("Network message dropped, msg age: ${age}", ("age", fc::time_point::now() - msg.receive_time));
             return;
         }
 
