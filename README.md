@@ -6,9 +6,7 @@ This project is based on [Haya](https://github.com/mixbytes/haya), which impleme
 
 RANDPA was inspired by [GRANDPA](https://github.com/w3f/consensus/blob/master/pdf/grandpa.pdf). It achieves
 deterministic finality within 2-3 seconds in the real-world network conditions. This improvement significantly reduces
-waiting time for transactions and all smart contract based operations, including
-[Game Channels](https://github.com/DaoCasino/Protocol). RANDPA is implementation is still in development, so please use
-it for the test purposes only.
+waiting time for transactions and all smart contract based operations.
 
 We also provide some test and benchmarking tools, so you can actually run RANDPA on your own machine.
 
