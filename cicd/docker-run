@@ -55,7 +55,10 @@ validate_build_type() {
   esac
 }
 validate_timeout() {
-  local to="${1:?}"
+  local to="${1:-}"
+  if [[ -z "$to" ]]; then
+    return
+  fi
   [[ "$to" -gt 0 ]] && [[ "$to" =~ ^[0-9]+$ ]] ||
     die "Invalid argument to --timeout option: $to. See ./$PROGNAME help."
 }
