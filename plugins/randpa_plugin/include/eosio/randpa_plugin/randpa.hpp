@@ -702,10 +702,10 @@ private:
         }
 
         if (should_start_round(event.block_id)) {
-            randpa_dlog("starting new round");
+            randpa_dlog("removing current round ${r}", ("r", (_round ? _round->get_num() : 0)));
             remove_round();
-            randpa_dlog("current round removed");
 
+            randpa_dlog("starting new round");
             if (is_active_bp(event.block_id)) {
                 new_round(round_num(event.block_id), event.creator_key, event.active_bp_keys);
                 randpa_dlog("new round (${n}) started", ("n", _round->get_num()));
