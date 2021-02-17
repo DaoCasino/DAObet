@@ -692,20 +692,23 @@ private:
             return;
         }
 
+        // when node in syncing or frozen state it's useless to creating new rounds
         _is_syncing = event.sync;
         _is_frozen = get_block_num(event.block_id) - get_block_num(_lib) > _max_finality_lag_blocks;
-
-        // when node in syncing or frozen state it's useless to creating new rounds
-        if (_is_syncing || _is_frozen) {
-            randpa_ilog("Randpa omit block while syncing or frozen, id: ${id}", ("id", event.block_id));
+        if (_is_syncing) {
+            randpa_ilog("Randpa omit block while syncing, block id: ${id}", ("id", event.block_id));
+            return;
+        }
+        if (_is_frozen) {
+            randpa_ilog("Randpa omit block while frozen, block id: ${id}", ("id", event.block_id));
             return;
         }
 
         if (should_start_round(event.block_id)) {
-            randpa_dlog("starting new round");
+            randpa_dlog("removing current round ${r}", ("r", (_round ? _round->get_num() : 0)));
             remove_round();
-            randpa_dlog("current round removed");
 
+            randpa_dlog("starting new round");
             if (is_active_bp(event.block_id)) {
                 new_round(round_num(event.block_id), event.creator_key, event.active_bp_keys);
                 randpa_dlog("new round (${n}) started", ("n", _round->get_num()));
@@ -797,11 +800,16 @@ private:
 
     bool should_end_prevote(const block_id_type& block_id) const {
         if (!_round) {
+            randpa_dlog("No active round; no need to finish prevote phase.");
             return false;
         }
 
-        return round_num(block_id) == _round->get_num()
-            && num_in_round(block_id) == prevote_width;
+        bool should_end = round_num(block_id) == _round->get_num() && num_in_round(block_id) == prevote_width;
+        if (!should_end) {
+            randpa_dlog("Cannot end prevote phase for block ${b} on round ${r}",
+                ("b", get_block_num(block_id))("r", _round->get_num()));
+        }
+        return should_end;
     }
 
     bool is_active_bp(const block_id_type& block_id) const {

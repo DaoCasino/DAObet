@@ -90,7 +90,7 @@ public:
 
     void on(const prevote_msg& msg) {
         if (state != state_type::prevote && state != state_type::ready_to_precommit) {
-            randpa_dlog("Skipping prevote, round: ${r}", ("r", num));
+            randpa_dlog("Skipping prevote for round ${r}: invalid state: ${s}", ("r", num)("s", static_cast<uint32_t>(state)));
             return;
         }
 
@@ -111,7 +111,7 @@ public:
 
     void on(const precommit_msg& msg) {
         if (state != state_type::precommit && state != state_type::ready_to_precommit) {
-            randpa_dlog("Skipping precommit, round: ${r}", ("r", num));
+            randpa_dlog("Skipping precommit for round ${r}: invalid state: ${s}", ("r", num)("s", static_cast<uint32_t>(state)));
             return;
         }
 
