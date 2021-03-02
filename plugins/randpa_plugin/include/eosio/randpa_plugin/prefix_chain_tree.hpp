@@ -52,9 +52,6 @@ struct chain_type {
 };
 
 
-class NodeNotFoundError : public std::exception {};
-
-
 template <typename NodeType>
 class prefix_chain_tree {
     using node_ptr = std::shared_ptr<NodeType>;
@@ -86,6 +83,15 @@ public:
     prefix_chain_tree() = delete;
     prefix_chain_tree(const prefix_chain_tree&) = delete;
 
+    block_ids_type get_blocks() const {
+        block_ids_type blocks;
+        blocks.reserve(block_index.size());
+        for (const auto& block : block_index) {
+            blocks.push_back(block.first);
+        }
+        return blocks;
+    }
+
     node_ptr find(const block_id_type& block_id) const {
         auto itr = block_index.find(block_id);
         return itr != block_index.end() ? itr->second.lock() : nullptr;
@@ -101,8 +107,6 @@ public:
             return nullptr;
         }
         return _add_confirmations(node, blocks, sender_key, conf);
-
-
     }
 
     void remove_confirmations() {
@@ -114,7 +118,8 @@ public:
         }
     }
 
-    void insert(const chain_type& chain,
+    /// Try to insert chain blocks into tree. Returns false if base_block or one of blocks exists in prefix tree.
+    bool insert(const chain_type& chain,
                 const public_key_type& creator_key,
                 const std::set<public_key_type>& active_bp_keys) {
         node_ptr node = nullptr;
@@ -122,10 +127,11 @@ public:
         std::tie(node, blocks) = get_tree_node(chain);
 
         if (!node) {
-            throw NodeNotFoundError();
+            return false;
         }
 
         insert_blocks(node, blocks, creator_key, active_bp_keys);
+        return true;
     }
 
     node_ptr get_final_chain_head(size_t confirmation_number) const {

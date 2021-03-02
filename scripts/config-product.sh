@@ -10,11 +10,14 @@ PRODUCT_NAME="${PRODUCT_NAME,,}" # to lower case
 # core symbol name
 case "$PRODUCT_NAME" in
 (*daobet*)
+  PRODUCT_NAME=daobet
   PRODUCT_NAME_OFFICIAL="DAOBet"
   CORE_SYMBOL_NAME=BET
   ;;
 (*haya*)
+  PRODUCT_NAME=haya
   PRODUCT_NAME_OFFICIAL="Haya"
   CORE_SYMBOL_NAME=SYS
   ;;
 esac
+readonly PRODUCT_NAME PRODUCT_NAME_OFFICIAL CORE_SYMBOL_NAME

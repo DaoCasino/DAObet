@@ -681,13 +681,12 @@ private:
             ("bpk", event.active_bp_keys)
         );
 
-        try {
-            _prefix_tree->insert({event.prev_block_id, {event.block_id}},
-                                event.creator_key, event.active_bp_keys);
-        } catch (const NodeNotFoundError& e) {
-            randpa_elog("Randpa cannot insert block into tree, base_block: ${base_id}, block: ${id}",
+        bool ok = _prefix_tree->insert({event.prev_block_id, {event.block_id}}, event.creator_key, event.active_bp_keys);
+        if (!ok) {
+            randpa_elog("Randpa cannot insert block into tree, base_block: ${base_id}, block: ${id}, block_index: ${bi}",
                 ("base_id", event.prev_block_id)
                 ("id", event.block_id)
+                ("bi", _prefix_tree->get_blocks())
             );
             return;
         }
