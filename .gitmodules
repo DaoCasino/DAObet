@@ -6,7 +6,6 @@
 	path = libraries/appbase
 	url = https://github.com/mixbytes/appbase
 	ignore = dirty
-	branch = queue_thread_safety
 [submodule "libraries/softfloat"]
 	path = libraries/softfloat
 	url = https://github.com/eosio/berkeley-softfloat-3
@@ -19,6 +18,9 @@
 [submodule "libraries/yubihsm"]
 	path = libraries/yubihsm
 	url = https://github.com/Yubico/yubihsm-shell
+[submodule "libraries/eos-vm"]
+	path = libraries/eos-vm
+	url = https://github.com/eosio/eos-vm
 [submodule "plugins/telemetry_plugin/lib/prometheus-cpp"]
 	path = plugins/telemetry_plugin/lib/prometheus-cpp
 	url = git://github.com/jupp0r/prometheus-cpp.git
